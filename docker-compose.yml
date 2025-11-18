@@ -1,0 +1,13 @@
+services:
+  plmp_backend:
+    build:
+      context: .
+      network: host  # Fixes Snap Docker DNS issue locally
+    container_name: plmp_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=1
+    command: python manage.py runserver 0.0.0.0:8000
