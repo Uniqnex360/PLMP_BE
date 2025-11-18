@@ -30,10 +30,21 @@ class user(Document):
     def save(self, *args, **kwargs):
         if not self.user_name: 
             self.generate_default_username()
+    
         from .custom_middleware import get_current_client
-        client_id = ObjectId(get_current_client())          
-        self.client_id = ObjectId(client_id)
+        client_id = get_current_client()  # should return the client ObjectId or client document
+
+        if client_id:
+            from .models import client  # ensure you import the client Document
+        # If get_current_client() returns ObjectId
+            if isinstance(client_id, ObjectId):
+                self.client_id = client.objects(id=client_id).first()
+        # If it already returns a client document
+            else:
+                self.client_id = client_id
+
         return super(user, self).save(*args, **kwargs)
+
 
 class brand_count(Document):
     client_id = fields.ReferenceField(client)

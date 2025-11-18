@@ -570,7 +570,7 @@ def obtainCategoryAndSections(request):
 @csrf_exempt
 def obtainAllProductList(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
-
+    print("USER_LGOIN_ID",user_login_id)
     client_id = get_current_client()
     category_id = request.GET.get("category_id")
     varient_option_name = request.GET.get("variant_option_name_id")
@@ -697,9 +697,10 @@ def obtainAllProductList(request):
                 # 'preserveNullAndEmptyArrays': True
             }
         },
-    {
-        "$match":{'products.client_id':ObjectId(client_id)}
-    }]
+    # {
+    #     "$match":{'products.client_id':ObjectId(client_id)}
+    # }
+    ]
     if product_varient_option_obj:
         pipeline.extend([
         {
@@ -4064,6 +4065,7 @@ def brandUpdate(request):
 
 
 def obtainVarientOptions(request):
+    print('request',obtainVarientOptions)
     category_id = request.GET.get("id")
     client_id = get_current_client()
     if category_id:
@@ -4089,7 +4091,8 @@ def obtainVarientOptions(request):
                 'path': '$varient_option',
                 'preserveNullAndEmptyArrays': True
             }
-        }, {
+        }, 
+        {
             "$match":{'varient_option.client_id':ObjectId(client_id)}
         },
         {

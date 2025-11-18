@@ -22,7 +22,6 @@ def loginUser(request):
         if 'user_name' in jsonRequest:
             jsonRequest['name'] = jsonRequest['user_name']
 
-        print("userdata", jsonRequest)
 
         # lookup user
         lookup = {
@@ -41,7 +40,7 @@ def loginUser(request):
 
         # --- valid user ---
         role_name = user_data_obj.role
-        client_id = "" if role_name == "super-admin" else str(user_data_obj.client_id.id)
+        client_id = "" if role_name == "super-admin" else str(user_data_obj.client_id)
 
         payload = {
             "id": str(user_data_obj.id),

@@ -100,13 +100,20 @@ def obtainUserObjFromToken(request):
         return validationObjJWT
 
 
-def check_role_and_capability(request,role_name):
+def check_role_and_capability(request, role_name):
     path = request.path.split("/")
-    action = path[2] if len(path) >=3 else None
+    action = path[2] if len(path) >= 3 else None
     is_accessible = False
-    capability_obj = DatabaseModel.get_document(capability.objects, {"action_name":action, "role_list__in" : [role_name]})
+    capability_obj = DatabaseModel.get_document(capability.objects, {"action_name": action, "role_list__in": [role_name]})
+    
+    print('capability_obj', capability_obj)
+    
     if capability_obj != None:
+        print('✅ HAVE ACCESS - Role has permission for this action')
         is_accessible = True 
+    else:
+        print('❌ NO ACCESS - Role does not have permission for this action')
+    
     return is_accessible
 import threading
 
