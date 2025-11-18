@@ -36,6 +36,13 @@ connect(
     db=MONGODB_COURSE_DB_NAME,
     host=MONGODB_HOST_1
 )
+try:
+    from mongoengine.connection import get_db
+    get_db()
+    print("MongoDB Connection: OK")
+except Exception as e:
+    print("MongoDB Connection Error:", e)
+
 
 
 ALLOWED_HOSTS = ["*"]

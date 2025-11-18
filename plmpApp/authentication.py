@@ -7,57 +7,69 @@ from rest_framework.decorators import api_view
 from django.views.decorators.csrf import csrf_exempt
 from django.middleware import csrf
 from .models import user
-
 from rest_framework.parsers import JSONParser
 import jwt
 from rest_framework.decorators import api_view
-
-@api_view(('GET', 'POST'))
+@api_view(['GET', 'POST'])
 @csrf_exempt
 def loginUser(request):
-    jsonRequest = JSONParser().parse(request)
-    user_data_obj = DatabaseModel.get_document(user.objects, jsonRequest)
-    token = ''
-    if user_data_obj == None:
-        response = createJsonResponse(request)
-        valid = False
-    else:
-        role_name = user_data_obj.role
-        if user_data_obj.role == 'super-admin':
-            # _thread_locals.login_client_id = str("super-admin")
-            client_id = ""
+    try:
+        jsonRequest = JSONParser().parse(request)
+        if 'user_name' in jsonRequest:
+            jsonRequest['name'] = jsonRequest['user_name']
+        print('userdata', jsonRequest)
+        lookup = {
+    "name": jsonRequest.get("name"),
+    "password": jsonRequest.get("password")
+}
+        user_data_obj = DatabaseModel.get_document(user.objects, lookup)
+        token = ''
+        if user_data_obj is None:
+            response = createJsonResponse(request)
+            valid = False
         else:
-            # _thread_locals.login_client_id = str(user_data_obj.client_id.id)
-            client_id = str(user_data_obj.client_id.id)
-        payload = {
-            'id': str(user_data_obj.id),
-            'first_name': user_data_obj.name,
-            'email': user_data_obj.email,
-            'role_name': role_name.lower().replace(' ', '_'),
-            'max_age': SIMPLE_JWT['SESSION_COOKIE_MAX_AGE']
-        }
-        token = jwt.encode(payload=payload, key=SIMPLE_JWT['SIGNING_KEY'], algorithm=SIMPLE_JWT['ALGORITHM'])
-        # token = token.decode('utf-8')
-        valid = True
-        user_data_obj.is_active = True
-        # user_data_obj.save()
-        response = createJsonResponse(request, token)
-        createCookies(token, response)
-        response.data['data']['user_login_id'] = str(user_data_obj.id)
-        response.data['data']['user_role'] = str(user_data_obj.role)
-        response.data['data']['client_id'] = str(client_id)
-        csrf.get_token(request)
-    response.data['data']['valid'] = valid
-    return response
-
-
+            role_name = user_data_obj.role
+            if role_name == 'super-admin':
+                client_id = ""
+            else:
+                client_id = str(user_data_obj.client_id.id)
+            payload = {
+                'id': str(user_data_obj.id),
+                'first_name': user_data_obj.name,
+                'email': user_data_obj.email,
+                'role_name': role_name.lower().replace(' ', '_'),
+                'max_age': SIMPLE_JWT['SESSION_COOKIE_MAX_AGE']
+            }
+            token = jwt.encode(
+                payload=payload,
+                key=SIMPLE_JWT['SIGNING_KEY'],
+                algorithm=SIMPLE_JWT['ALGORITHM']
+            )
+            valid = True
+            user_data_obj.is_active = True
+            response = createJsonResponse(request, token)
+            createCookies(token, response)
+            response.data['data']['user_login_id'] = str(user_data_obj.id)
+            response.data['data']['user_role'] = role_name
+            response.data['data']['client_id'] = client_id
+            csrf.get_token(request)
+        response.data['data']['valid'] = valid
+        return response
+    except Exception as e:
+        print("LOGIN ERROR:", str(e))
+        error_response = createJsonResponse(
+            request,
+            message="Internal server error",
+            status=False
+        )
+        error_response.data['data']['valid'] = False
+        error_response.data['data']['error'] = str(e)
+        return error_response
 @api_view(('GET', 'POST'))
 def logout(request):
     response = createJsonResponse(request)
     response.data['data']['status'] = 'logged out'
     return response
-
-
 import random
 import string
 from django.core.mail import send_mail
@@ -66,10 +78,8 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from datetime import datetime, timedelta
 from .models import email_otp 
-
 def generate_otp():
     return ''.join(random.choices(string.digits, k=6))  
-
 @csrf_exempt
 def sendOtp(request):
     json_req = JSONParser().parse(request)
@@ -96,9 +106,7 @@ def sendOtp(request):
     )
     data['status'] = True
     return JsonResponse(data,safe=False)
-
 @csrf_exempt
-
 def resetPassword(request):
     json_req = JSONParser().parse(request)
     otp = json_req.get('otp')
