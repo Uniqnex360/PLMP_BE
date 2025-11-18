@@ -27,14 +27,15 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 import os
-
+from dotenv import load_dotenv
 PORT = os.getenv("PORT", "8000")
-from .env import MONGODB_COURSE_DB_NAME,MONGODB_HOST_1,front_end_ip
+# from .env import MONGODB_COURSE_DB_NAME,MONGODB_HOST_1,front_end_ip
+load_dotenv() 
 
 from mongoengine import connect
 connect(
-    db=MONGODB_COURSE_DB_NAME,
-    host=MONGODB_HOST_1
+    db=os.getenv("MONGODB_COURSE_DB_NAME"),
+    host=os.getenv("MONGODB_HOST_1")
 )
 try:
     from mongoengine.connection import get_db
@@ -132,7 +133,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    front_end_ip,
+   os.getenv("front_end_ip"),
 ]
 
 
@@ -140,7 +141,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
-    front_end_ip,
+    os.getenv("front_end_ip"),
 ]
 
 # Database
