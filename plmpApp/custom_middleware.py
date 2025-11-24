@@ -109,7 +109,6 @@ def check_role_and_capability(request, role_name):
     print('capability_obj', capability_obj)
     
     if capability_obj != None:
-        print('✅ HAVE ACCESS - Role has permission for this action')
         is_accessible = True 
     else:
         print('❌ NO ACCESS - Role does not have permission for this action')

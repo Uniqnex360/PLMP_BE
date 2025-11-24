@@ -52,6 +52,10 @@ from pytz import timezone # type: ignore
 from django.utils.timezone import is_naive, make_aware # type: ignore
 from .custom_middleware import get_current_user,get_current_client
 from mongoengine.connection import get_db
+from django.core.cache import cache
+from django.http import JsonResponse
+import hashlib
+import json
 def v1(request):
     u_o = DatabaseModel.get_document(user.objects).name
     db = get_db()  # Fetch the active MongoDB connection
@@ -566,6 +570,7 @@ def obtainCategoryAndSections(request):
     data['category_count'] = len(result)
     return data
 
+CACHE_TTL = 600
 
 @csrf_exempt
 def obtainAllProductList(request):
@@ -576,9 +581,21 @@ def obtainAllProductList(request):
     varient_option_name = request.GET.get("variant_option_name_id")
     varient_option_value = request.GET.get("variant_option_value_id")
     brand_id = request.GET.get("brand_id")
-    filter = request.GET.get("filter")
+    filter_param = request.GET.get("filter")
     search_term = request.GET.get('search')
     pg = request.GET.get('pg')
+    level_name = request.GET.get("level_name")
+    raw_key_string = (
+        f"{user_login_id}|{category_id}|{varient_option_name}|"
+        f"{varient_option_value}|{brand_id}|{filter_param}|"
+        f"{search_term}|{pg}|{level_name}"
+    )
+    hashed_key = hashlib.md5(raw_key_string.encode('utf-8')).hexdigest()
+    cache_key = f"prod_list_{hashed_key}"
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        print(f"Cache HIT: {cache_key}")
+        return cached_result
     if pg:
         try:
             pg = int(pg)
@@ -592,7 +609,7 @@ def obtainAllProductList(request):
         to_pg = 25
     if search_term == None:
         search_term = ""
-    if filter == "true" or filter == None:
+    if filter_param == "true" or filter_param == None:
         reverse_check = -1
     else:
         reverse_check = 1
@@ -803,6 +820,7 @@ def obtainAllProductList(request):
         getCategoryLevelOrder(j)
     data['product_list'] = result_
     # data['product_list'] = sorted(data['product_list'], key=lambda x: ObjectId(x['product_id']),reverse=reverse_check)
+    cache.set(cache_key, data, CACHE_TTL)
     return data
 
 
@@ -992,7 +1010,10 @@ def productUpdate(request):
     #     elif json_req['update_obj']['units'] == "mm":
     #         length = str( length) +"mm"+'L'
 
-    x,update_dict = DatabaseModel.update_documents(products.objects,{'id':product_id},json_req['update_obj'])
+    update_dict = json_req['update_obj'].copy()
+    if 'brand_id' in json_req['update_obj'] and json_req['update_obj']['brand_id']:
+        json_req['update_obj']['brand_id'] = ObjectId(json_req['update_obj']['brand_id'])
+    DatabaseModel.update_documents(products.objects, {'id': product_id}, json_req['update_obj'])
     products_obj = DatabaseModel.get_document(products.objects,{'id':product_id})
     # products_obj.dimensions = (dimensions(height=height, width=width,depth =depth,length =length))
     products_obj.save()
@@ -1190,6 +1211,13 @@ def exportAll(request):
     client_id = get_current_client()
     is_active_product = request.GET.get('is_active_product')
     is_active_variant = request.GET.get('is_active_variant')
+    print("\n" + "="*60)
+    print("EXPORT ALL CALLED")
+    print(f"category_id: {category_id}")
+    print(f"client_id: {client_id}")
+    print(f"is_active_product: {is_active_product}")
+    print(f"is_active_variant: {is_active_variant}")
+    print("="*60)
     if is_active_product == 'true':
         is_active_product = {'is_active': True}
     else:
@@ -1242,14 +1270,15 @@ def exportAll(request):
                 'as': 'product_varient_option_ins'
             }
         },  
-        {'$unwind': {'path': '$product_varient_option_ins', 'preserveNullAndEmptyArrays': True}},{
-        '$lookup': {
-            'from': 'product_varient_option',
-            'localField': 'product_varient_ins.varient_option_id',
-            'foreignField': '_id',
-            'as': 'product_varient_option_ins'
-        }
-        },  {
+        # {'$unwind': {'path': '$product_varient_option_ins', 'preserveNullAndEmptyArrays': True}},{
+        # '$lookup': {
+        #     'from': 'product_varient_option',
+        #     'localField': 'product_varient_ins.varient_option_id',
+        #     'foreignField': '_id',
+        #     'as': 'product_varient_option_ins'
+        # }
+        # },
+        {
             '$unwind': {
                 'path': '$product_varient_option_ins',
                 'preserveNullAndEmptyArrays': True
@@ -1355,7 +1384,14 @@ def exportAll(request):
         }
     
     ]
+    print("\nRUNNING AGGREGATION PIPELINE...")
     result = list(products.objects.aggregate(*pipeline))
+    print(f"AGGREGATION RESULT COUNT: {len(result)} document(s)")
+    if len(result) == 0:
+        print("NO PRODUCTS FOUND — WILL RETURN EXCEL WITH ONLY HEADERS")
+    else:
+        print("SAMPLE OF FIRST RESULT:")
+        print(result[0] if result else "None")
     max_variants = 0
     max_image = 0
     
@@ -1368,6 +1404,8 @@ def exportAll(request):
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = "Products"
+    print(f"\nMAX VARIANTS FOUND: {max_variants}")
+    print(f"MAX IMAGES PER VARIANT: {max_image}")
     # headers = [   
     # "S.No","mpn", "Variant SKU","Product Name","Model", "UPC/EAN","taxonomy","Brand", "Short Description","Long Description",
     # "Retail Price", "Unfinished Price", "Finished Price"
@@ -1479,6 +1517,9 @@ def exportAll(request):
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['Pragma'] = 'no-cache'
     response['Expires'] = '0'
+    print("CONTENT LENGTH:", len(response.content))
+    print("FIRST 500 BYTES:", response.content[:500])
+    print("HAS EXCEL MAGIC BYTES?", response.content.startswith(b'PK'))  #
     return response
 
 
@@ -2230,85 +2271,112 @@ def createBrand(request):
     data['is_created'] = True
     return data
 
+from django.http import JsonResponse
 
 def obtainBrand(request):
     client_id = get_current_client()
-    data = dict()
     brand_id = request.GET.get('id')
-    if brand_id:
-        match = {
-            '$match':{'client_id':ObjectId(client_id),'_id':ObjectId(brand_id)}
-        }
-    else:
-        match = {
-            '$match':{'client_id':ObjectId(client_id)}
-        }
-
-    pipeline = [
-        match,
-    {
-            '$group': {
-                "_id":'$_id',
-                # "brand_list":{'$push':{"id":"$_id",'name':'$name','brand_number':'$brand_number','logo':'$logo'}}
-                'brand_number':{'$first':'$brand_number'},
-                'name':{'$first':'$name'},
-                'email':{'$first':'$email'},
-                'mobile_number':{'$first':'$mobile_number'},
-                'address':{'$first':'$address'},
-                'city':{'$first':'$city'},
-                'state':{'$first':'$state'},
-                'zip_code':{'$first':'$zip_code'},
-                'website':{'$first':'$website'},
-                'number_of_feeds':{'$first':'$number_of_feeds'},
-                'logo':{'$first':'$logo'},
-        }
-        },{
-            '$project':{
-                '_id':1,
-                'brand_number':1,
-                'name':1,
-                'email':1,
-                'mobile_number':1,
-                'city':1,
-                'state':1,
-                'zip_code':1,
-                'address':1,
-                'website':1,
-                'number_of_feeds':1,
-                'logo':1,
-            }
-        },
-    #     {
-    #     '$addFields': {
-    #         'name_lowercase': { '$toLower': "$name" }
-    #     }
-    # },
-    {
-        '$sort': { '_id': -1 }
-    },
-    ]
-    brand_list = list(brand.objects.aggregate(*pipeline))
-    protocol = 'http'  # You can adjust to 'https' if needed
+    print("///////////////////////////////",brand_id)
     
-    # Get the domain (IP or domain name)
-    host = request.get_host()  # Example: 192.168.1.100:8000
+    match_filter = {'client_id': ObjectId(client_id)}
+    if brand_id:
+        match_filter['id'] = ObjectId(brand_id)
+    
+    brand_list = brand.objects.filter(**match_filter).order_by('-_id')
+    base_url = f"{request.scheme}://{request.get_host()}/"
+    
+    result = []
+    for b in brand_list:
+        product_models = products.objects.filter(brand_id=str(b.id))
+        sku_count = sum(len(p.options or []) for p in product_models)
+        
+        item = {
+            'id': str(b.id),
+            'brand_number': b.brand_number or "",
+            'name': b.name or "",
+            'email': b.email or "",
+            'mobile_number': b.mobile_number or "",
+            'address': b.address or "",
+            'city': b.city or "",
+            'state': b.state or "",
+            'zip_code': b.zip_code or "",
+            'website': b.website or "",
+            'logo': base_url + b.logo.lstrip('/') if b.logo else "",
+            'number_of_feeds': getattr(b, 'number_of_feeds', None),
+            'product_count': product_models.count(),
+            'sku_count': sku_count
+        }
+        result.append(item)
+    
+    return {                       # ← RETURN RAW DICT (this is what your middleware wants)
+        'brand_list': result,
+        'brand_count': len(result)
+    }
+    # pipeline = [
+    #     match,
+    # {
+    #         '$group': {
+    #             "_id":'$_id',
+    #             # "brand_list":{'$push':{"id":"$_id",'name':'$name','brand_number':'$brand_number','logo':'$logo'}}
+    #             'brand_number':{'$first':'$brand_number'},
+    #             'name':{'$first':'$name'},
+    #             'email':{'$first':'$email'},
+    #             'mobile_number':{'$first':'$mobile_number'},
+    #             'address':{'$first':'$address'},
+    #             'city':{'$first':'$city'},
+    #             'state':{'$first':'$state'},
+    #             'zip_code':{'$first':'$zip_code'},
+    #             'website':{'$first':'$website'},
+    #             'number_of_feeds':{'$first':'$number_of_feeds'},
+    #             'logo':{'$first':'$logo'},
+    #     }
+    #     },{
+    #         '$project':{
+    #             '_id':1,
+    #             'brand_number':1,
+    #             'name':1,
+    #             'email':1,
+    #             'mobile_number':1,
+    #             'city':1,
+    #             'state':1,
+    #             'zip_code':1,
+    #             'address':1,
+    #             'website':1,
+    #             'number_of_feeds':1,
+    #             'logo':1,
+    #         }
+    #     },
+    # #     {
+    # #     '$addFields': {
+    # #         'name_lowercase': { '$toLower': "$name" }
+    # #     }
+    # # },
+    # {
+    #     '$sort': { '_id': -1 }
+    # },
+    # ]
+    # protocol = 'http'  # You can adjust to 'https' if needed
+    
+    # # Get the domain (IP or domain name)
+    # host = request.get_host()  # Example: 192.168.1.100:8000
 
-    # Construct the full URL (protocol + host)
-    base_url = f"{protocol}://{host}/"
+    # # Construct the full URL (protocol + host)
+    # base_url = f"{protocol}://{host}/"
 
-    for i in brand_list:
-        i['id'] = str (i['_id'])
-        products_list = DatabaseModel.list_documents(products.objects,{'brand_id':i['id']})
-        i['product_count'] = len(products_list)
-        i['sku_count'] = 0
-        for j in products_list:
-            i['sku_count'] += len(j.options)
-        del i['_id']
-        if i['logo']:
-            i['logo'] = base_url + i['logo'].lstrip('/')
-    data['brand_list'] = brand_list
-    data['brand_count'] = len(data['brand_list'])
-    return data
+    # for i in brand_list:
+    #     i['id'] = str (i['_id'])
+    #     products_list = DatabaseModel.list_documents(products.objects,{'brand_id':i['id']})
+    #     i['product_count'] = len(products_list)
+    #     i['sku_count'] = 0
+    #     for j in products_list:
+    #         i['sku_count'] += len(j.options)
+    #     del i['_id']
+    #     if i['logo']:
+    #         i['logo'] = base_url + i['logo'].lstrip('/')
+    # data['brand_list'] = brand_list
+    # data['brand_count'] = len(data['brand_list'])
+    # print('brands',data)
+    # return data
 
 
 

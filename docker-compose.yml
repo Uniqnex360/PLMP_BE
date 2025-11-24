@@ -1,13 +1,24 @@
+version: '3.8'
 services:
+  redis:   # <--- This is the hostname Django uses
+    image: redis:alpine
   plmp_backend:
     build:
       context: .
-      network: host  # Fixes Snap Docker DNS issue locally
+      network: host  # This helps pip install run faster
     container_name: plmp_backend
-    ports:
-      - "8000:8000"
+    # IMPORTANT: On Linux host mode, you MUST remove the ports section
+    # ports:
+    #   - "8000:8000"
+    
+    # This connects the container directly to your WiFi/Ethernet
+    network_mode: "host"
+    
     volumes:
       - .:/app
     environment:
       - DEBUG=1
+      # Ensure your MONGO URI is set here if it's not in .env
+    
+    # Use 0.0.0.0 or localhost, both work in host mode
     command: python manage.py runserver 0.0.0.0:8000
