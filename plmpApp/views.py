@@ -4391,139 +4391,167 @@ def brandUpdate(request):
     data['is_updated'] = True
     return data
 
+from django.core.cache import cache
+import time
 
 def obtainVarientOptions(request):
-    print('request',obtainVarientOptions)
+    print('request', obtainVarientOptions)
+    start_time = time.time()
+    
     category_id = request.GET.get("id")
     client_id = get_current_client()
+    
+    # Build match condition
+    match_condition = {'category_id': {'$ne': 'all'}}
     if category_id:
-        category_id = {'category_id':category_id}
-    else:
-        category_id = {}
+        match_condition['category_id'] = category_id
+    
+    # Optimized aggregation pipeline
     pipeline = [
+        {'$match': match_condition},
         {
-            "$match":category_id
-        },{
-            "$match":{'category_id':{'$ne':'all'}}
-        },
-        {
-        '$lookup': {
-            'from': 'varient_option',
-            'localField': 'varient_option_id_list',
-            'foreignField': '_id',
-            'as': 'varient_option'
-        }
-        }, 
-        {
-            '$unwind': {
-                'path': '$varient_option',
-                'preserveNullAndEmptyArrays': True
+            '$lookup': {
+                'from': 'varient_option',
+                'let': {'varient_ids': '$varient_option_id_list'},
+                'pipeline': [
+                    {'$match': {
+                        '$expr': {'$in': ['$_id', '$$varient_ids']},
+                        'client_id': ObjectId(client_id)
+                    }}
+                ],
+                'as': 'varient_option'
             }
-        }, 
-        {
-            "$match":{'varient_option.client_id':ObjectId(client_id)}
         },
+        {'$unwind': {'path': '$varient_option', 'preserveNullAndEmptyArrays': True}},
         {
-        '$lookup': {
-            'from': 'type_name',
-            'localField': 'varient_option.option_name_id',
-            'foreignField': '_id',
-            'as': 'type_name'
-        }
-        }, 
-        {
-            '$unwind': {
-                'path': '$type_name',
-                'preserveNullAndEmptyArrays': True
+            '$lookup': {
+                'from': 'type_name',
+                'localField': 'varient_option.option_name_id',
+                'foreignField': '_id',
+                'as': 'type_name'
             }
-        },    {
-        '$lookup': {
-            'from': 'type_value',
-            'localField': 'varient_option.option_value_id_list',
-            'foreignField': '_id',
-            'as': 'type_value'
-        }
-        }, 
+        },
+        {'$unwind': {'path': '$type_name', 'preserveNullAndEmptyArrays': True}},
         {
-            '$unwind': {
-                'path': '$type_value',
-                'preserveNullAndEmptyArrays': True
+            '$lookup': {
+                'from': 'type_value',
+                'localField': 'varient_option.option_value_id_list',
+                'foreignField': '_id',
+                'as': 'type_value'
             }
         },
         {
-        '$group': {
-            "_id":"$varient_option",
-            "type_name":{'$first':"$type_name.name"},
-            "varient_option_id":{'$first':"$varient_option._id"},
-            "type_id":{'$first':"$type_name._id"},
-            "category_varient_id":{'$first':"$_id"},
-            "category_id":{'$first':"$category_id"},
-            "category_level":{'$first':"$category_level"},
-            'option_value_list': {
-                "$addToSet": {
-                    'type_value_name': "$type_value.name",
-                    'type_value_id': "$type_value._id",
+            '$group': {
+                "_id": {
+                    "varient_option": "$varient_option",
+                    "type_name": "$type_name",
+                    "category_id": "$category_id",
+                    "category_level": "$category_level",
+                    "category_varient_id": "$_id"
+                },
+                "type_values": {'$push': '$type_value'}
+            }
+        },
+        {
+            '$project': {
+                "_id": 0,
+                "type_name": "$_id.type_name.name",
+                "varient_option_id": "$_id.varient_option._id",
+                "type_id": "$_id.type_name._id",
+                "category_varient_id": "$_id.category_varient_id",
+                "category_id": "$_id.category_id",
+                "category_level": "$_id.category_level",
+                'option_value_list': {
+                    '$map': {
+                        'input': "$type_values",
+                        'as': "tv",
+                        'in': {
+                            'type_value_name': "$$tv.name",
+                            'type_value_id': "$$tv._id",
+                        }
+                    }
                 }
             }
         }
-        },{
-        '$project':{
-            "_id":0,
-            "type_name":1,
-            'option_value_list': 1,
-            'varient_option_id':1,
-            'category_level':1,
-            'category_varient_id':1,
-            'category_id':1,
-            
-            'type_id':1
-        }
-        }
-        ]
-    result = list(category_varient.objects.aggregate(*pipeline))
+    ]
     
-    data = dict()
-    data['category_varient_id'] = ""
-    if len(result)>0:
-        for i in result:
-            i['type_id'] = str(i['type_id']) if 'type_id'in i else ""
-            data['category_varient_id'] = str(i['category_varient_id'])
-            if category_id == {}:
-                collections = [
-                    category,
-                    level_five_category,
-                    level_four_category,
-                    level_three_category,
-                    level_two_category,
-                    level_one_category
-                ]
+    try:
+        # Execute with timeout
+        result = list(category_varient.objects.aggregate(pipeline, allowDiskUse=True))
+        
+        data = {'category_varient_id': "", 'varient_list': []}
+        
+        if result:
+            # BATCH FETCH category names to avoid N+1 queries
+            if not category_id:  # Only needed when no specific category filter
+                category_names_map = fetch_category_names_batch(result)
+            else:
+                category_names_map = {}
+            
+            processed_results = []
+            for i in result:
+                i['type_id'] = str(i.get('type_id', ''))
+                data['category_varient_id'] = str(i.get('category_varient_id', ''))
+                
+                # Add category name if available
+                if not category_id and 'category_id' in i:
+                    category_name = category_names_map.get(str(i['category_id']))
+                    if category_name:
+                        i['type_name'] = f"{i.get('type_name', '')} ({category_name})"
+                
+                # Clean up and convert IDs
+                if 'category_varient_id' in i:
+                    del i['category_varient_id']
+                
+                i['varient_option_id'] = str(i.get('varient_option_id', ''))
+                
+                # Process option values
+                option_values = i.get('option_value_list', [])
+                for j in option_values:
+                    j['type_value_id'] = str(j.get('type_value_id', ''))
+                
+                processed_results.append(i)
+            
+            data['varient_list'] = processed_results
+        
+        execution_time = time.time() - start_time
+        print(f"obtainVarientOptions executed in {execution_time:.2f} seconds")
+        
+        return data
+        
+    except Exception as e:
+        print(f"Error in obtainVarientOptions: {str(e)}")
+        return {'category_varient_id': "", 'varient_list': []}
 
-                category_name = None
 
-                for collection in collections:
-                    try:
-                        # Use this line if you're using MongoEngine
-                        category_obj = collection.objects(id=i['category_id']).first()
-
-                        # Use this line instead if you're using PyMongo
-                        # category_obj = collection.find_one({'id': i['category_id']})
-
-                        if category_obj:
-                            category_name = category_obj.name
-                            break
-                    except Exception as e:
-                        print(f"Error checking collection {collection}: {e}")
-                if category_name:
-                    i['type_name'] = i['type_name']+" " +"("+ category_name+")"
-            del i['category_varient_id']
-            i['varient_option_id'] =  str(i['varient_option_id'])
-            try:
-                for j in i['option_value_list']:
-                    j['type_value_id'] = str(j['type_value_id']) 
-            except:
-                i['option_value_list'] = []
-    data['varient_list'] = result
-    return data
+def fetch_category_names_batch(result_items):
+    """Batch fetch category names to avoid N+1 queries"""
+    category_ids = set()
+    for item in result_items:
+        if 'category_id' in item:
+            category_ids.add(item['category_id'])
+    
+    category_names_map = {}
+    collections = [
+        (category, 'category'),
+        (level_five_category, 'level_five'),
+        (level_four_category, 'level_four'),
+        (level_three_category, 'level_three'),
+        (level_two_category, 'level_two'),
+        (level_one_category, 'level_one')
+    ]
+    
+    for collection, coll_name in collections:
+        try:
+            # Batch query all categories at once
+            category_objs = collection.objects(id__in=list(category_ids))
+            for cat in category_objs:
+                category_names_map[str(cat.id)] = getattr(cat, 'name', 'Unknown')
+        except Exception as e:
+            print(f"Error fetching from {coll_name}: {e}")
+            continue
+    
+    return category_names_map
 
 @csrf_exempt
 def updateCategoryToProducts(request):
