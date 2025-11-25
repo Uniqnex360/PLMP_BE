@@ -2807,11 +2807,236 @@ def saveXlData(request):
                 flag = True
             
             if flag == False:
-                data['added_count'] += 1
+                data['added_count'] +=1
+
+            if isinstance(model,str) == False and isinstance(upc_ean,str) == False and isinstance(Variant_SKU,str) == False  and isinstance(category_level,str) == False:
+                break
+            if isinstance(model,str) == False:
+                is_varient = True
+            else:
+                is_varient = False
+            option_name_list = list()
+            option_number = 1
+            while f'Option{option_number} Name' in row_dict and f'Option{option_number} Value' in row_dict:
+                option_name = row_dict[f'Option{option_number} Name']
+                option_value = row_dict[f'Option{option_number} Value']
+                if is_varient:
+                    if len(option_name_list) >= option_number:
+                        option_name = option_name_list[option_number - 1]
+                    else:
+                        option_number += 1
+                        continue
+                else:
+                    option_name_list.append(option_name)
+                if isinstance(option_name, str) :
+                    options.append({"name":option_name,"value": option_value})
+                option_number += 1
+            image_str_list = list()
+            option_number = 1
+            if img_src:
+                img_src = [url.strip() for url in img_src.split(',')]
+            else:
+                img_src = []
+            product_name = product_name.title()
+            product_obj = DatabaseModel.get_document(products.objects,{'product_name':product_name,'client_id':ObjectId(client_id)})
+            if product_obj==None:
                 
-                # [Rest of your processing logic continues here...]
-                # I've kept the validation and encoding handling
-                # The rest of the logic remains the same as your original code
+                category_list = []
+                if isinstance(category_level, str):
+                    category_list = [item.strip() for item in category_level.split('>')]
+                previous_category_id = ""
+                for index,i in enumerate(category_list):
+                    i = i.title()
+                    if index == 0:
+                        category_obj = DatabaseModel.get_document(category.objects,{'name':i,'client_id':client_id})
+                        if category_obj == None:
+                            category_obj = DatabaseModel.save_documents(category,{'name':i})
+                            logForCategory(category_obj.id,"Created",user_login_id,'level-1',{})
+                        previous_category_id = category_obj.id
+                    if index == 1:
+                        level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'name':i,'client_id':client_id})
+                        if level_one_category_obj == None:
+                            level_one_category_obj = DatabaseModel.save_documents(level_one_category,{'name':i})
+                            logForCategory(level_one_category_obj.id,"Created",user_login_id,'level-1',{})
+                        DatabaseModel.update_documents(category.objects,{"id":previous_category_id},{"add_to_set__level_one_category_list":level_one_category_obj.id})
+                        previous_category_id = level_one_category_obj.id
+                    if index == 2:
+                        level_two_category_obj = DatabaseModel.get_document(level_two_category.objects,{'name':i,'client_id':client_id})
+                        if level_two_category_obj == None:
+                            level_two_category_obj = DatabaseModel.save_documents(level_two_category,{'name':i})
+                            logForCategory(level_two_category_obj.id,"Created",user_login_id,'level-1',{})
+                            
+                        DatabaseModel.update_documents(level_one_category.objects,{"id":previous_category_id},{"add_to_set__level_two_category_list":level_two_category_obj.id})
+                        previous_category_id = level_two_category_obj.id
+                    if index == 3:
+                        level_three_category_obj = DatabaseModel.get_document(level_three_category.objects,{'name':i,'client_id':client_id})
+                        if level_three_category_obj == None:
+                            level_three_category_obj = DatabaseModel.save_documents(level_three_category,{'name':i})
+                            logForCategory(level_three_category_obj.id,"Created",user_login_id,'level-1',{})
+                            
+                        DatabaseModel.update_documents(level_two_category.objects,{"id":previous_category_id},{"add_to_set__level_three_category_list":level_three_category_obj.id})
+                        previous_category_id = level_three_category_obj.id
+                    if index == 4:
+                        level_four_category_obj = DatabaseModel.get_document(level_four_category.objects,{'name':i,'client_id':client_id})
+                        if level_four_category_obj == None:
+                            level_four_category_obj = DatabaseModel.save_documents(level_four_category,{'name':i})
+                            logForCategory(level_four_category_obj.id,"Created",user_login_id,'level-1',{})
+                            
+                        DatabaseModel.update_documents(level_three_category.objects,{"id":previous_category_id},{"add_to_set__level_four_category_list":level_four_category_obj.id})
+                        previous_category_id = level_four_category_obj.id
+                    if index == 5:
+                        level_five_category_obj = DatabaseModel.get_document(level_five_category.objects,{'name':i,'client_id':client_id})
+                        if level_five_category_obj == None:
+                            level_five_category_obj = DatabaseModel.save_documents(level_five_category,{'name':i})
+                            logForCategory(level_five_category_obj.id,"Created",user_login_id,'level-1',{})
+                            
+                        DatabaseModel.update_documents(level_four_category.objects,{"id":previous_category_id},{"add_to_set__level_five_category_list":level_five_category_obj.id})
+                        previous_category_id = level_five_category_obj.id
+                if brand_name.title() in optimize_dict:
+                    brand_id = optimize_dict[brand_name.title()] 
+                else:
+                    brand_obj = DatabaseModel.get_document(brand.objects,{'name':brand_name.title(),'client_id':client_id})
+                    if brand_obj:
+                        brand_id = brand_obj.id
+                    else:
+                        brand_obj = DatabaseModel.save_documents(brand,{'name':brand_name.title(),'client_id':client_id})
+                        brand_id = brand_obj.id
+                    optimize_dict[brand_name.title()]  = brand_id
+                product_obj = DatabaseModel.save_documents(products,{"model":model,"upc_ean":str(upc_ean),'mpn':str(mpn),"product_name":product_name.title(),"long_description":long_description,"short_description":short_description,"brand_id":brand_id,"breadcrumb":breadcrumb,"key_features":str(key_features),'tags':Tags,'image':img_src,'option_str':option_str,'dimensions':dimensions})
+                product_id = product_obj.id
+                logForCreateProduct(product_id,user_login_id,"Created",{})
+                category_level = ""
+                if len(category_list) == 1:
+                    category_level = "level-1"
+                elif len(category_list) == 2:
+                    category_level = "level-2"
+                elif len(category_list) == 3:
+                    category_level = "level-3"
+                elif len(category_list) == 4:
+                    category_level = "level-4"
+                elif len(category_list) == 5:
+                    category_level = "level-5"
+                elif len(category_list) == 6:
+                    category_level = "level-6"
+                product_category_config_obj = DatabaseModel.save_documents(product_category_config,{'product_id':product_id,'category_level':category_level,"category_id":str(previous_category_id)})
+            else:
+                product_id = product_obj.id
+                if brand_name.title() in optimize_dict:
+                    brand_id = optimize_dict[brand_name.title()] 
+                else:
+                    brand_obj = DatabaseModel.get_document(brand.objects,{'name':brand_name.title(),'client_id':client_id})
+                    if brand_obj:
+                        brand_id = brand_obj.id
+                    else:
+                        brand_obj = DatabaseModel.save_documents(brand,{'name':brand_name.title(),'client_id':client_id})
+                        brand_id = brand_obj.id
+                    optimize_dict[brand_name.title()]  = brand_id
+                x, update_dict = DatabaseModel.update_documents(products.objects,{'id':product_id},{"model":model,"upc_ean":str(upc_ean),'mpn':str(mpn),"long_description":long_description,"short_description":short_description,"brand_id":brand_id,"breadcrumb":breadcrumb,"key_features":str(key_features),'tags':Tags,'option_str':option_str,'dimensions':dimensions}) 
+                logForCreateProduct(product_id,user_login_id,"Updated",update_dict)
+            product_obj.image = img_src
+            product_obj.save()
+            product_category_config_obj = DatabaseModel.get_document(product_category_config.objects,{'product_id':product_id})
+            cat_retail_price = 1
+            retail_price = "0"
+            if Finished_Price == None:
+                Finished_Price = "0"
+            if Un_Finished_Price == None:
+                Un_Finished_Price = "0"
+            if product_category_config_obj:
+                category_id = product_category_config_obj.category_id
+                brand_category_price_obj = DatabaseModel.get_document(brand_category_price.objects,{'category_id':ObjectId(category_id),'brand_id':product_obj.brand_id.id,'is_active':True})
+                if brand_category_price_obj:
+                    cat_retail_price = brand_category_price_obj.price
+                    if brand_category_price_obj.price_option == 'finished_price':
+                        retail_price = str(float(Finished_Price) * float(cat_retail_price))
+                    else:
+                        retail_price = str(float(Un_Finished_Price) * float(cat_retail_price))
+                else:
+                    retail_price = str(float(Finished_Price) * float(1))
+            sku_number_list = [i.sku_number for i in product_obj.options]
+            sku_number_id_list = [i.id for i in product_obj.options]
+            if Variant_SKU not in sku_number_list:
+                product_varient_obj = DatabaseModel.save_documents(product_varient,{"sku_number":Variant_SKU,"finished_price":str(Finished_Price),"un_finished_price":str(Un_Finished_Price),"quantity":str(stockv),"retail_price":retail_price})
+                createradial_price_log(product_varient_obj.id,"0",retail_price,user_login_id,client_id)
+                logForCreateProductVarient(product_varient_obj.id,user_login_id,"Created",{})
+                for i in options:
+                    if i['name'].title() in optimize_dict:
+                        type_name_id = optimize_dict[i['name'].title()] 
+                    else:
+                        type_name_obj = DatabaseModel.get_document(type_name.objects,{'name':i['name'].title()})
+                        if type_name_obj ==None:
+                            type_name_obj = DatabaseModel.save_documents(type_name,{'name':i['name'].title()})   
+                        type_name_id = type_name_obj.id
+                        optimize_dict[i['name'].title()] = type_name_id
+                    if str(i['value']).title() in optimize_dict:
+                        type_value_id = optimize_dict[str(i['value']).title()] 
+                    else:
+                        type_value_obj = DatabaseModel.get_document(type_value.objects,{'name':str(i['value']).title()})
+                        if type_value_obj ==None:
+                            type_value_obj = DatabaseModel.save_documents(type_value,{'name':str(i['value']).title()})   
+                        type_value_id = type_value_obj.id
+                        optimize_dict[str(i['value']).title()] = type_value_id
+                    product_varient_option_obj = DatabaseModel.save_documents(product_varient_option,{"option_name_id":type_name_id,"option_value_id":type_value_id})
+                    DatabaseModel.update_documents(product_varient.objects,{"id":product_varient_obj.id},{"add_to_set__varient_option_id":product_varient_option_obj.id})
+                    DatabaseModel.update_documents(products.objects,{"id":product_id},{"add_to_set__options":product_varient_obj.id,'add_to_set__image':image_str_list})
+                    varient_option_obj = DatabaseModel.get_document(varient_option.objects,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id})
+                    if varient_option_obj:
+                        DatabaseModel.update_documents(varient_option.objects,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id},{"add_to_set__option_value_id_list":type_value_id})
+                    else:
+                        varient_option_obj = DatabaseModel.save_documents(varient_option,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id,"option_value_id_list":[type_value_id]})
+
+                    category_varient_obj = DatabaseModel.get_document(category_varient.objects,{'category_id':str(category_id)})
+                    if category_varient_obj == None:
+                        obtainlogForCategoryVarientOption(category_id,varient_option_obj.id,"create",ObjectId(user_login_id),category_level,{})
+                        DatabaseModel.save_documents(category_varient,{'category_id':category_id,'varient_option_id_list':[varient_option_obj.id]})
+                    else:
+                        obtainlogForCategoryVarientOption(category_id,varient_option_obj.id,"create",ObjectId(user_login_id),category_level,{})
+                        DatabaseModel.update_documents(category_varient.objects,{"id":category_varient_obj.id},{'category_id':category_id,'add_to_set__varient_option_id_list':varient_option_obj.id})
+    
+            else:
+                x, updated_fields = DatabaseModel.update_documents(product_varient.objects,{"sku_number":Variant_SKU,'client_id':client_id},{"finished_price":str(Finished_Price),"un_finished_price":str(Un_Finished_Price),"quantity":str(stockv),"retail_price":retail_price})
+                product_varient_obj = DatabaseModel.get_document(product_varient.objects,{"sku_number":Variant_SKU,'client_id':client_id})
+                if product_varient_obj:
+                    createradial_price_log(product_varient_obj.id,"0",retail_price,user_login_id,client_id)
+                    dict_datas = {}
+                    logForCreateProductVarient(product_varient_obj.id,user_login_id,"Updated",updated_fields)
+                    for i in options:
+                        if i['name'].title() in optimize_dict:
+                            type_name_id = optimize_dict[i['name'].title()] 
+                        else:
+                            type_name_obj = DatabaseModel.get_document(type_name.objects,{'name':i['name'].title()})
+                            if type_name_obj ==None:
+                                type_name_obj = DatabaseModel.save_documents(type_name,{'name':i['name'].title()})   
+                            type_name_id = type_name_obj.id
+                            optimize_dict[i['name'].title()] = type_name_id
+                        if str(i['value']).title() in optimize_dict:
+                            type_value_id = optimize_dict[str(i['value']).title()] 
+                        else:
+                            type_value_obj = DatabaseModel.get_document(type_value.objects,{'name':str(i['value']).title()})
+                            if type_value_obj ==None:
+                                type_value_obj = DatabaseModel.save_documents(type_value,{'name':str(i['value']).title()})   
+                            type_value_id = type_value_obj.id
+                            optimize_dict[str(i['value']).title()] = type_value_id
+                        product_varient_option_check = DatabaseModel.get_document(product_varient_option.objects,{"option_name_id":type_name_id,"option_value_id":type_value_id})
+                        if product_varient_option_check == None:
+                            product_varient_option_obj = DatabaseModel.save_documents(product_varient_option,{"option_name_id":type_name_id,"option_value_id":type_value_id})
+                            DatabaseModel.update_documents(product_varient.objects,{"id":product_varient_obj.id},{"add_to_set__varient_option_id":product_varient_option_obj.id})
+                            DatabaseModel.update_documents(products.objects,{"id":product_id},{"add_to_set__options":product_varient_obj.id,
+                            'add_to_set__image':image_str_list})
+                        varient_option_obj = DatabaseModel.get_document(varient_option.objects,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id})
+                        if varient_option_obj:
+                            DatabaseModel.update_documents(varient_option.objects,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id},{"add_to_set__option_value_id_list":type_value_id})
+                        else:
+                            varient_option_obj = DatabaseModel.save_documents(varient_option,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id,"option_value_id_list":[type_value_id]})
+                        
+                        category_varient_obj = DatabaseModel.get_document(category_varient.objects,{'category_id':str(category_id)})
+                        if category_varient_obj == None:
+                            obtainlogForCategoryVarientOption(category_id,varient_option_obj.id,"Updated",ObjectId(user_login_id),category_level,{})
+                            DatabaseModel.save_documents(category_varient,{'category_id':category_id,'varient_option_id_list':[varient_option_obj.id]})
+                        else:
+                            obtainlogForCategoryVarientOption(category_id,varient_option_obj.id,"Updated",ObjectId(user_login_id),category_level,{})
+                            DatabaseModel.update_documents(category_varient.objects,{"id":category_varient_obj.id},{'category_id':category_id,'add_to_set__varient_option_id_list':varient_option_obj.id})
+
                 
         except Exception as e:
             logger.error(f"Error processing row {i + 2}: {str(e)}", exc_info=True)
