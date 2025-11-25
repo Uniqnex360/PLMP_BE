@@ -570,7 +570,6 @@ def obtainCategoryAndSections(request):
     data['category_count'] = len(result)
     return data
 
-CACHE_TTL = 600
 
 @csrf_exempt
 def obtainAllProductList(request):
@@ -590,12 +589,12 @@ def obtainAllProductList(request):
         f"{varient_option_value}|{brand_id}|{filter_param}|"
         f"{search_term}|{pg}|{level_name}"
     )
-    hashed_key = hashlib.md5(raw_key_string.encode('utf-8')).hexdigest()
-    cache_key = f"prod_list_{hashed_key}"
-    cached_result = cache.get(cache_key)
-    if cached_result:
-        print(f"Cache HIT: {cache_key}")
-        return cached_result
+    # hashed_key = hashlib.md5(raw_key_string.encode('utf-8')).hexdigest()
+    # cache_key = f"prod_list_{hashed_key}"
+    # cached_result = cache.get(cache_key)
+    # if cached_result:
+    #     print(f"Cache HIT: {cache_key}")
+    #     return cached_result
     if pg:
         try:
             pg = int(pg)
@@ -820,7 +819,6 @@ def obtainAllProductList(request):
         getCategoryLevelOrder(j)
     data['product_list'] = result_
     # data['product_list'] = sorted(data['product_list'], key=lambda x: ObjectId(x['product_id']),reverse=reverse_check)
-    cache.set(cache_key, data, CACHE_TTL)
     return data
 
 
@@ -1757,107 +1755,120 @@ def traverse_categories(category, result_list):
             traverse_categories(sub_category, result_list)
     else:
         result_list.append({'id': category.id, 'name': category.name})
-
-
+        
 def obtainDashboardCount(request):
-    data = dict()
     client_id = get_current_client()
-    pipeline = [
-        {
-            '$match':{'client_id':ObjectId(client_id)}
-        },
-    {
-            '$group': {
-                "_id":'$_id',
-        }
-        }
-    ]
-    data['total_product'] =len(list(products.objects.aggregate(*pipeline)))
-    pipeline = [
-        {
-            '$match':{'client_id':ObjectId(client_id)}
-        },
-    {
-            '$group': {
-                "_id":'$_id',
-        }
-        }
-    ]
-    data['total_brand'] = len(list(brand.objects.aggregate(*pipeline)))
-    last_all_ids = []
-    category_list = DatabaseModel.list_documents(category.objects, {'client_id': client_id})
-    last_all_ids = []
-    parent_level_category_list = []
-    seen = set()
-    for category_obj in category_list:
-        key = (str(category_obj.id), category_obj.name)
-        if key[1] not in seen:
-            seen.add(key[1])
-            parent_level_category_list.append({'id': key[0], 'name': key[1]})
-        traverse_categories(category_obj, last_all_ids)
-    data['category_project_dict'] = dict()
-    end_level_count_list = []
-    for i in last_all_ids:
-        product_category_config_count  = DatabaseModel.count_documents(product_category_config.objects,{'category_id':str(i['id'])})
-        if product_category_config_count > 0:
-            data['category_project_dict'][i['name']] = product_category_config_count
-            end_level_count_list.append(str(i['id']))
-    data['total_last_level_category'] = len(list(set(end_level_count_list)))
-    data['total_parent_level_category'] = len(category_list)
-    data['parent_level_category_list'] = parent_level_category_list
-    pipeline = [
-             {
-            '$match':{'client_id':ObjectId(client_id)}
-        },
-        {
-        '$lookup': {
-            'from': 'type_name',
-            'localField': 'option_name_id',
-            'foreignField': '_id',
-            'as': 'type_name'
-        }
-        }, 
-        {
-            '$unwind': {
-                'path': '$type_name',
-                'preserveNullAndEmptyArrays': True
+    
+    try:
+        # Get counts from individual collections
+        total_product = products.objects(client_id=ObjectId(client_id)).count()
+        total_brand = brand.objects(client_id=ObjectId(client_id)).count()
+        
+        # Get category stats using the original logic
+        last_all_ids = []
+        category_list = DatabaseModel.list_documents(category.objects, {'client_id': client_id})
+        parent_level_category_list = []
+        seen = set()
+        
+        for category_obj in category_list:
+            key = (str(category_obj.id), category_obj.name)
+            if key[1] not in seen:
+                seen.add(key[1])
+                parent_level_category_list.append({'id': key[0], 'name': key[1]})
+            traverse_categories(category_obj, last_all_ids)
+        
+        category_project_dict = {}
+        end_level_count_list = []
+        
+        for i in last_all_ids:
+            product_category_config_count = DatabaseModel.count_documents(
+                product_category_config.objects, 
+                {'category_id': str(i['id'])}
+            )
+            if product_category_config_count > 0:
+                category_project_dict[i['name']] = product_category_config_count
+                end_level_count_list.append(str(i['id']))
+        
+        total_last_level_category = len(set(end_level_count_list))
+        total_parent_level_category = len(category_list)
+        
+        # Get variant stats
+        pipeline = [
+            {
+                '$match': {'client_id': ObjectId(client_id)}
+            },
+            {
+                '$lookup': {
+                    'from': 'type_name',
+                    'localField': 'option_name_id',
+                    'foreignField': '_id',
+                    'as': 'type_name'
+                }
+            },
+            {
+                '$unwind': {
+                    'path': '$type_name',
+                    'preserveNullAndEmptyArrays': True
+                }
+            },
+            {
+                '$lookup': {
+                    'from': 'type_value',
+                    'localField': 'option_value_id_list',
+                    'foreignField': '_id',
+                    'as': 'type_value'
+                }
+            },
+            {
+                '$unwind': {
+                    'path': '$type_value',
+                    'preserveNullAndEmptyArrays': True
+                }
+            },
+            {
+                '$group': {
+                    "_id": "$type_name._id",
+                    "type_name": {'$first': "$type_name.name"},
+                    'option_value_list': {
+                        "$push": "$type_value.name",
+                    }
+                }
+            },
+            {
+                '$project': {
+                    "_id": 0,
+                    "type_name": 1,
+                    'option_value_count': {'$size': '$option_value_list'},
+                }
             }
-        },    {
-        '$lookup': {
-            'from': 'type_value',
-            'localField': 'option_value_id_list',
-            'foreignField': '_id',
-            'as': 'type_value'
-        }
-        }, 
-        {
-            '$unwind': {
-                'path': '$type_value',
-                'preserveNullAndEmptyArrays': True
-            }
-        },
-        {
-        '$group': {
-            "_id":"$type_name._id",
-            "type_name":{'$first':"$type_name.name"},
-            'option_value_list': {
-                "$push":  "$type_value.name",
-            }
-        }
-        },{
-        '$project':{
-            "_id":0,
-            "type_name":1,
-            'option_value_count': {'$size':'$option_value_list'},
-
-        }
-        }
         ]
-    result = list(varient_option.objects.aggregate(*pipeline))
-    data['varent_list'] = result
-    return data
-
-
+        
+        varent_list = list(varient_option.objects.aggregate(*pipeline))
+        
+        data = {
+            'total_product': total_product,
+            'total_brand': total_brand,
+            'total_parent_level_category': total_parent_level_category,
+            'total_last_level_category': total_last_level_category,
+            'category_project_dict': category_project_dict,
+            'parent_level_category_list': parent_level_category_list,  # Add this for React
+            'varent_list': varent_list
+        }
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Error in obtainDashboardCount: {str(e)}")
+        return {
+            'total_product': 0,
+            'total_brand': 0,
+            'total_parent_level_category': 0,
+            'total_last_level_category': 0,
+            'category_project_dict': {},
+            'parent_level_category_list': [],  # Add this for React
+            'varent_list': []
+        }
+        
 @csrf_exempt
 def swapProductToCategory(request):
     json_req = JSONParser().parse(request)
@@ -4178,106 +4189,129 @@ def obtainInActiveProducts(request):
     data['product_count'] = len(result)
     return data
 
+from functools import lru_cache
+from bson import ObjectId
 
-def  obtainListofCategoryCombinations(request):
-    client_id = get_current_client()
-    # client_id=request.GET.get("id")
-    last_all_ids = []
-    category_list = DatabaseModel.list_documents(category.objects,{'client_id':ObjectId(client_id)})
-    for category_obj in category_list:
-        if len(category_obj.level_one_category_list)>0:
-            for i in category_obj.level_one_category_list:
-                if len(i.level_two_category_list)>0:
-                    for j in i.level_two_category_list:
-                        if len(j.level_three_category_list)>0:
-                            for k in j.level_three_category_list:
-                                if len(k.level_four_category_list)>0:
-                                    for l in  k.level_four_category_list:
-                                        if len(l.level_five_category_list)>0:
-                                            for m in  l.level_five_category_list:
-                                                last_all_ids.append({'id':str(m.id),'name':m.name})
-                                        else:
-                                            last_all_ids.append({'id':str(l.id),'name':l.name})
-                                else:
-                                    last_all_ids.append({'id':str(k.id),'name':k.name})
-                        else:
-                            last_all_ids.append({'id':str(j.id),'name':j.name})
-                else:
-                    last_all_ids.append({'id':str(i.id),'name':i.name})
-        else:
-            last_all_ids.append({'id':str(category_obj.id),'name':category_obj.name})
+@lru_cache(maxsize=1024)
+def get_root_category_name(level_one_id):
+    """Safely get root category name with caching"""
+    root = DatabaseModel.get_document(
+        category.objects,
+        {'level_one_category_list__in': [ObjectId(level_one_id)]}
+    )
+    return root.name if root else "Unknown Category"
+
+def build_breadcrumb(category_id, level):
+    """Build full breadcrumb safely and efficiently"""
+    breadcrumb = []
     
-    for i in last_all_ids:
-        category_obj = DatabaseModel.get_document(category.objects,{'id':i['id']})
-        if category_obj:
-            i['category_name'] = category_obj.name
-            i['category_last_name'] = category_obj.name
-            i['category_number'] = category_obj.category_number
-            i['category_level_str'] = "level-1"
-        else:
-            level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'id':i['id']})
-            if level_one_category_obj:
-                i['category_name'] = level_one_category_obj.name
-                i['category_last_name'] = level_one_category_obj.name
-                i['category_number'] = level_one_category_obj.category_number
-                i['category_level_str'] = "level-2"
-                i['category_name'] = DatabaseModel.get_document(category.objects,{'level_one_category_list__in':[i['id']]}).name + " > "+i['category_name']
-            else:
-                level_two_category_obj = DatabaseModel.get_document(level_two_category.objects,{'id':i['id']})
-                if level_two_category_obj:
-                    i['category_name'] = level_two_category_obj.name
-                    i['category_last_name'] = level_two_category_obj.name
-                    i['category_number'] = level_two_category_obj.category_number
-                    i['category_level_str'] = "level-3"
-                    level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'level_two_category_list__in':[i['id']]})
-                    i['category_name'] =  level_one_category_obj.name + " > " + i['category_name']
-                    i['category_name'] = DatabaseModel.get_document(category.objects,{'level_one_category_list__in':[level_one_category_obj.id]}).name + " > " + i['category_name'] 
-                else:                                                                                       
-                    level_three_category_obj = DatabaseModel.get_document(level_three_category.objects,{'id':i['id']})
-                    if level_three_category_obj:                        
-                        i['category_name'] = level_three_category_obj.name
-                        i['category_last_name'] = level_three_category_obj.name
-                        i['category_number'] = level_three_category_obj.category_number
-                        i['category_level_str'] = "level-4"
-                        level_two_category_obj = DatabaseModel.get_document(level_two_category.objects,{'level_three_category_list__in':[i['id']]})
-                        i['category_name'] =  level_two_category_obj.name + " > " + i['category_name'] 
-                        level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'level_two_category_list__in':[level_two_category_obj.id]})
-                        i['category_name'] =  level_one_category_obj.name + " > " + i['category_name'] 
-                        i['category_name'] = DatabaseModel.get_document(category.objects,{'level_one_category_list__in':[level_one_category_obj.id]}).name + " > " + i['category_name'] 
-                    else:
-                        level_four_category_obj = DatabaseModel.get_document(level_four_category.objects,{'id':i['id']})
-                        if level_four_category_obj:
-                            i['category_name'] = level_four_category_obj.name
-                            i['category_last_name'] = level_four_category_obj.name
-                            i['category_number'] = level_four_category_obj.category_number
-                            i['category_level_str'] = "level-5"
-                            level_three_category_obj = DatabaseModel.get_document(level_three_category.objects,{'level_four_category_list__in':[i['id']]})
-                            i['category_name'] =  level_three_category_obj.name  + " > " + i['category_name']
-                            level_two_category_obj = DatabaseModel.get_document(level_two_category.objects,{'level_three_category_list__in':[level_three_category_obj.id]})
-                            i['category_name'] =  level_two_category_obj.name + " > " + i['category_name'] 
-                            level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'level_two_category_list__in':[level_two_category_obj.id]})
-                            i['category_name'] =  level_one_category_obj.name + " > " + i['category_name']
-                            i['category_name'] = DatabaseModel.get_document(category.objects,{'level_one_category_list__in':[level_one_category_obj.id]}).name  + " > " + i['category_name']
-                        else:
-                            level_five_category_obj = DatabaseModel.get_document(level_five_category.objects,{'id':i['id']})
-                            if level_five_category_obj:
-                                i['category_name'] = level_five_category_obj.name
-                                i['category_last_name'] = level_five_category_obj.name
-                                i['category_number'] = level_five_category_obj.category_number
-                                i['category_level_str'] = "level-6"
-                                level_four_category_obj = DatabaseModel.get_document(level_four_category.objects,{'level_five_category_list__in':[level_five_category_obj.id]})
-                                i['category_name'] =  level_four_category_obj.name  + " > " + i['category_name']
-                                level_three_category_obj = DatabaseModel.get_document(level_three_category.objects,{'level_four_category_list__in':[level_four_category_obj.id]})
-                                i['category_name'] = level_three_category_obj.name  + " > " + i['category_name']
-                                level_two_category_obj = DatabaseModel.get_document(level_two_category.objects,{'level_three_category_list__in':[level_three_category_obj.id]})
-                                i['category_name'] =level_two_category_obj.name + " > " +  i['category_name'] 
-                                level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'level_two_category_list__in':[level_two_category_obj.id]})
-                                i['category_name'] =level_one_category_obj.name   + " > " +  i['category_name']
-                                i['category_name'] =DatabaseModel.get_document(category.objects,{'level_one_category_list__in':[level_one_category_obj.id]}).name + " > " + i['category_name']
-    data = dict()
-    data['last_all_ids'] = last_all_ids
-    # return JsonResponse(data,safe=False)
-    return data
+    # Map level string to model and parent field lookup
+    level_config = {
+        'level-1': (category, None, None),
+        'level-2': (level_one_category, 'level_one_category_list__in', None),
+        'level-3': (level_two_category, 'level_two_category_list__in', 'level_one_category_list__in'),
+        'level-4': (level_three_category, 'level_three_category_list__in', 'level_two_category_list__in'),
+        'level-5': (level_four_category, 'level_four_category_list__in', 'level_three_category_list__in'),
+        'level-6': (level_five_category, 'level_five_category_list__in', 'level_four_category_list__in'),
+    }
+    
+    if level not in level_config:
+        return "Invalid Level", "Invalid Level"
+
+    model, parent_field, grandparent_field = level_config[level]
+    
+    # Get current level object
+    obj = DatabaseModel.get_document(model.objects, {'id': ObjectId(category_id)})
+    if not obj:
+        return "Deleted Category", "Deleted Category"
+    
+    current_name = getattr(obj, 'name', 'Unknown')
+    category_number = getattr(obj, 'category_number', '')
+    
+    # Walk up to root
+    current_id = str(obj.id)
+    current_level_num = int(level.split('-')[1])
+    
+    while current_level_num > 1:
+        prev_level_num = current_level_num - 1
+        prev_model = level_config[f'level-{prev_level_num}'][0]
+        field_name = level_config[f'level-{current_level_num}'][1]
+        
+        parent = DatabaseModel.get_document(
+            prev_model.objects,
+            {field_name: [ObjectId(current_id)]}
+        )
+        if not parent:
+            break
+        breadcrumb.append(parent.name)
+        current_id = str(parent.id)
+        current_level_num -= 1
+    
+    # Add root category (level-0)
+    if current_level_num == 1:
+        root_name = get_root_category_name(current_id)
+        breadcrumb.append(root_name)
+    
+    breadcrumb.reverse()
+    full_path = " > ".join(breadcrumb + [current_name])
+    last_name = current_name
+    
+    return full_path, last_name, category_number
+
+
+def obtainListofCategoryCombinations(request):
+    client_id = get_current_client()
+    if not client_id:
+        return {'last_all_ids': []}
+    
+    last_all_ids = []
+    
+    # Step 1: Get all leaf categories efficiently
+    categories = DatabaseModel.list_documents(
+        category.objects,
+        {'client_id': ObjectId(client_id)}
+    )
+    
+    for cat in categories:
+        def traverse(obj, path=None):
+            if path is None:
+                path = []
+            
+            # Go as deep as possible
+            children = []
+            if hasattr(obj, 'level_one_category_list'):
+                children = obj.level_one_category_list
+            elif hasattr(obj, 'level_two_category_list'):
+                children = obj.level_two_category_list
+            # ... add more if needed
+            
+            if not children:
+                # Leaf node
+                last_all_ids.append({
+                    'id': str(obj.id),
+                    'level': f'level-{len(path) + 1}'
+                })
+                return
+            
+            for child in children:
+                traverse(child, path + [obj])
+        
+        traverse(cat)
+    
+    # Step 2: Build breadcrumbs safely and fast
+    result = []
+    for item in last_all_ids:
+        full_name, last_name, cat_number = build_breadcrumb(item['id'], item['level'])
+        
+        result.append({
+            'id': item['id'],
+            'category_name': full_name,
+            'category_last_name': last_name,
+            'category_number': cat_number,
+            'category_level_str': item['level']
+        })
+    
+    return {'last_all_ids': result}
 
 @csrf_exempt
 def updatevarientToReleatedCategories(request):
