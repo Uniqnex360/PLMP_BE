@@ -29,3 +29,4 @@ sqlparse==0.5.3
 typing-extensions==4.12.2
 tzdata==2025.1
 python-dotenv==1.0.1
+chardet==5.2.0
