@@ -2626,7 +2626,7 @@ def saveXlData(request):
         )
     
     # Extract field mappings
-    model_key = field_data.get('model')
+    model_column_key = field_data.get('model')
     upc_ean_key = field_data.get('upc_ean')
     mpn_key = field_data.get('MPN')
     OPTIONS_key = field_data.get('OPTIONS')
@@ -2744,7 +2744,8 @@ def saveXlData(request):
     data['field_error'] = 0
     data['total_products'] = 0
     optimize_dict = {}
-    
+    product_cache={}
+    # model_key = str(model).strip() if model else None
     logger.info(f"Starting to process {len(df)} rows")
     
     # Process each row
@@ -2758,7 +2759,7 @@ def saveXlData(request):
             row_dict = df.iloc[i].to_dict()
             
             # Extract values with NaN handling
-            model = "" if isinstance(row_dict.get(model_key), float) and math.isnan(row_dict.get(model_key)) else row_dict.get(model_key)
+            model = "" if isinstance(row_dict.get(model_column_key), float) and math.isnan(row_dict.get(model_column_key)) else row_dict.get(model_column_key)
             upc_ean = "" if isinstance(row_dict.get(upc_ean_key), float) and math.isnan(row_dict.get(upc_ean_key)) else row_dict.get(upc_ean_key)
             mpn = "" if isinstance(row_dict.get(mpn_key), float) and math.isnan(row_dict.get(mpn_key)) else row_dict.get(mpn_key)
             option_str = "" if isinstance(row_dict.get(OPTIONS_key), float) and math.isnan(row_dict.get(OPTIONS_key)) else row_dict.get(OPTIONS_key)
@@ -2776,7 +2777,8 @@ def saveXlData(request):
             stockv = "" if isinstance(row_dict.get(stockv_key), float) and math.isnan(row_dict.get(stockv_key)) else row_dict.get(stockv_key)
             category_level = None if isinstance(row_dict.get(category_level_key), float) and math.isnan(row_dict.get(category_level_key)) else row_dict.get(category_level_key)
             dimensions = "" if isinstance(row_dict.get(dimensions_key), float) and math.isnan(row_dict.get(dimensions_key)) else row_dict.get(dimensions_key)
-            
+            model_key = str(model).strip() if model else None
+
             # Validation
             options = []
             flag = False
@@ -2820,26 +2822,33 @@ def saveXlData(request):
             if flag == False:
                 data['added_count'] +=1
 
-            if isinstance(model,str) == False and isinstance(upc_ean,str) == False and isinstance(Variant_SKU,str) == False  and isinstance(category_level,str) == False:
-                break
-            if isinstance(model,str) == False:
-                is_varient = True
+            # if isinstance(model,str) == False and isinstance(upc_ean,str) == False and isinstance(Variant_SKU,str) == False  and isinstance(category_level,str) == False:
+            #     break
+            # if isinstance(model,str) == False:
+            #     is_varient = True
+            # else:
+            #     is_varient = False
+            # model_key = str(model).strip() if model else None
+            if model_key and model_key in product_cache:
+                product_id=product_cache[model_key]
+                product_obj = DatabaseModel.get_document(products.objects, {'id': product_id})
+                is_varient=True
             else:
-                is_varient = False
+                is_varient=False
             option_name_list = list()
             option_number = 1
             while f'Option{option_number} Name' in row_dict and f'Option{option_number} Value' in row_dict:
                 option_name = row_dict[f'Option{option_number} Name']
                 option_value = row_dict[f'Option{option_number} Value']
-                if is_varient:
-                    if len(option_name_list) >= option_number:
-                        option_name = option_name_list[option_number - 1]
-                    else:
-                        option_number += 1
-                        continue
-                else:
-                    option_name_list.append(option_name)
-                if isinstance(option_name, str) :
+                # if is_varient:
+                #     if len(option_name_list) >= option_number:
+                #         option_name = option_name_list[option_number - 1]
+                #     else:
+                #         option_number += 1
+                #         continue
+                # else:
+                #     option_name_list.append(option_name)
+                if isinstance(option_name, str) and isinstance(option_value,str):
                     options.append({"name":option_name,"value": option_value})
                 option_number += 1
             image_str_list = list()
@@ -2849,7 +2858,11 @@ def saveXlData(request):
             else:
                 img_src = []
             product_name = product_name.title()
-            product_obj = DatabaseModel.get_document(products.objects,{'product_name':product_name,'client_id':ObjectId(client_id)})
+            if not is_varient:
+                product_obj = DatabaseModel.get_document(products.objects,{'model':model,'client_id':ObjectId(client_id)})
+                category_list=[]
+                if isinstance(category_level,str):
+                    category_list = [item.strip() for item in category_level.split('>')]
             if product_obj==None:
                 
                 category_list = []
@@ -2915,6 +2928,8 @@ def saveXlData(request):
                     optimize_dict[brand_name.title()]  = brand_id
                 product_obj = DatabaseModel.save_documents(products,{"model":model,"upc_ean":str(upc_ean),'mpn':str(mpn),"product_name":product_name.title(),"long_description":long_description,"short_description":short_description,"brand_id":brand_id,"breadcrumb":breadcrumb,"key_features":str(key_features),'tags':Tags,'image':img_src,'option_str':option_str,'dimensions':dimensions})
                 product_id = product_obj.id
+                if model_key:
+                    product_cache[model_key]=product_id
                 logForCreateProduct(product_id,user_login_id,"Created",{})
                 category_level = ""
                 if len(category_list) == 1:
@@ -2932,18 +2947,21 @@ def saveXlData(request):
                 product_category_config_obj = DatabaseModel.save_documents(product_category_config,{'product_id':product_id,'category_level':category_level,"category_id":str(previous_category_id)})
             else:
                 product_id = product_obj.id
-                if brand_name.title() in optimize_dict:
-                    brand_id = optimize_dict[brand_name.title()] 
-                else:
-                    brand_obj = DatabaseModel.get_document(brand.objects,{'name':brand_name.title(),'client_id':client_id})
-                    if brand_obj:
-                        brand_id = brand_obj.id
+                if not is_varient:
+                    if brand_name.title() in optimize_dict:
+                        brand_id = optimize_dict[brand_name.title()] 
                     else:
-                        brand_obj = DatabaseModel.save_documents(brand,{'name':brand_name.title(),'client_id':client_id})
-                        brand_id = brand_obj.id
-                    optimize_dict[brand_name.title()]  = brand_id
-                x, update_dict = DatabaseModel.update_documents(products.objects,{'id':product_id},{"model":model,"upc_ean":str(upc_ean),'mpn':str(mpn),"long_description":long_description,"short_description":short_description,"brand_id":brand_id,"breadcrumb":breadcrumb,"key_features":str(key_features),'tags':Tags,'option_str':option_str,'dimensions':dimensions}) 
-                logForCreateProduct(product_id,user_login_id,"Updated",update_dict)
+                        brand_obj = DatabaseModel.get_document(brand.objects,{'name':brand_name.title(),'client_id':client_id})
+                        if brand_obj:
+                            brand_id = brand_obj.id
+                        else:
+                            brand_obj = DatabaseModel.save_documents(brand,{'name':brand_name.title(),'client_id':client_id})
+                            brand_id = brand_obj.id
+                        optimize_dict[brand_name.title()]  = brand_id
+                    x, update_dict = DatabaseModel.update_documents(products.objects,{'id':product_id},{"model":model,"upc_ean":str(upc_ean),'mpn':str(mpn),"long_description":long_description,"short_description":short_description,"brand_id":brand_id,"breadcrumb":breadcrumb,"key_features":str(key_features),'tags':Tags,'option_str':option_str,'dimensions':dimensions}) 
+                    logForCreateProduct(product_id,user_login_id,"Updated",update_dict)
+                    if model_key:
+                        product_cache[model_key]=product_id
             product_obj.image = img_src
             product_obj.save()
             product_category_config_obj = DatabaseModel.get_document(product_category_config.objects,{'product_id':product_id})
