@@ -540,7 +540,10 @@ def obtainCategoryAndSections(request):
         category_entry['level_one_category_count'] = len(category_entry['level_one_category_list'])
     result = sorted(transformed_result, key=lambda x: x['_id'])
     last_all_ids = []
-    category_list = DatabaseModel.list_documents(category.objects,{'client_id':ObjectId(client_id)})
+    category_list = DatabaseModel.list_documents(
+    category.objects.select_related(depth=5),
+    {'client_id': ObjectId(client_id)}
+)
     for category_obj in category_list:
         if len(category_obj.level_one_category_list)>0:
             for i in category_obj.level_one_category_list:
@@ -2872,28 +2875,31 @@ def saveXlData(request):
                 for index,i in enumerate(category_list):
                     i = i.title()
                     if index == 0:
-                        category_obj = DatabaseModel.get_document(category.objects,{'name':i,'client_id':client_id})
+                        category_obj = DatabaseModel.get_document(category.objects,{'name':i,'client_id':ObjectId(client_id)})
                         if category_obj == None:
                             category_obj = DatabaseModel.save_documents(category,{'name':i})
                             logForCategory(category_obj.id,"Created",user_login_id,'level-1',{})
                         previous_category_id = category_obj.id
                     if index == 1:
-                        level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'name':i,'client_id':client_id})
+                        level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'name':i,'client_id':ObjectId(client_id)})
                         if level_one_category_obj == None:
                             level_one_category_obj = DatabaseModel.save_documents(level_one_category,{'name':i})
                             logForCategory(level_one_category_obj.id,"Created",user_login_id,'level-1',{})
+                        if level_one_category_obj.id not in category_obj.level_one_category_list:
+                            DatabaseModel.update_documents(category.objects,{"id":previous_category_id},{"add_to_set__level_one_category_list":level_one_category_obj.id})
                         DatabaseModel.update_documents(category.objects,{"id":previous_category_id},{"add_to_set__level_one_category_list":level_one_category_obj.id})
                         previous_category_id = level_one_category_obj.id
                     if index == 2:
-                        level_two_category_obj = DatabaseModel.get_document(level_two_category.objects,{'name':i,'client_id':client_id})
+                        level_two_category_obj = DatabaseModel.get_document(level_two_category.objects,{'name':i,'client_id':ObjectId(client_id)})
                         if level_two_category_obj == None:
                             level_two_category_obj = DatabaseModel.save_documents(level_two_category,{'name':i})
                             logForCategory(level_two_category_obj.id,"Created",user_login_id,'level-1',{})
-                            
-                        DatabaseModel.update_documents(level_one_category.objects,{"id":previous_category_id},{"add_to_set__level_two_category_list":level_two_category_obj.id})
+                        if level_two_category_obj.id not in category_obj.level_two_category_list:
+                            DatabaseModel.update_documents(category.objects,{"id":previous_category_id},{"add_to_set__level_one_category_list":level_two_category_obj.id})   
+                        DatabaseModel.update_documents(level_one_category.objects,{"id":previous_category_id},{"add_to_set__level_two_category_list":level_three_category_obj.id})
                         previous_category_id = level_two_category_obj.id
                     if index == 3:
-                        level_three_category_obj = DatabaseModel.get_document(level_three_category.objects,{'name':i,'client_id':client_id})
+                        level_three_category_obj = DatabaseModel.get_document(level_three_category.objects,{'name':i,'client_id':ObjectId(client_id)})
                         if level_three_category_obj == None:
                             level_three_category_obj = DatabaseModel.save_documents(level_three_category,{'name':i})
                             logForCategory(level_three_category_obj.id,"Created",user_login_id,'level-1',{})
@@ -2901,7 +2907,7 @@ def saveXlData(request):
                         DatabaseModel.update_documents(level_two_category.objects,{"id":previous_category_id},{"add_to_set__level_three_category_list":level_three_category_obj.id})
                         previous_category_id = level_three_category_obj.id
                     if index == 4:
-                        level_four_category_obj = DatabaseModel.get_document(level_four_category.objects,{'name':i,'client_id':client_id})
+                        level_four_category_obj = DatabaseModel.get_document(level_four_category.objects,{'name':i,'client_id':ObjectId(client_id)})
                         if level_four_category_obj == None:
                             level_four_category_obj = DatabaseModel.save_documents(level_four_category,{'name':i})
                             logForCategory(level_four_category_obj.id,"Created",user_login_id,'level-1',{})
@@ -2909,7 +2915,7 @@ def saveXlData(request):
                         DatabaseModel.update_documents(level_three_category.objects,{"id":previous_category_id},{"add_to_set__level_four_category_list":level_four_category_obj.id})
                         previous_category_id = level_four_category_obj.id
                     if index == 5:
-                        level_five_category_obj = DatabaseModel.get_document(level_five_category.objects,{'name':i,'client_id':client_id})
+                        level_five_category_obj = DatabaseModel.get_document(level_five_category.objects,{'name':i,'client_id':ObjectId(client_id)})
                         if level_five_category_obj == None:
                             level_five_category_obj = DatabaseModel.save_documents(level_five_category,{'name':i})
                             logForCategory(level_five_category_obj.id,"Created",user_login_id,'level-1',{})
