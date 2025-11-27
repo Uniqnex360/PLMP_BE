@@ -4095,17 +4095,19 @@ def obtainUserBasedOnClient(request):
 
 @csrf_exempt
 def UpdateProductActiveInActive(request):
-    json_req = JSONParser().parse(request)
-    products_obj = DatabaseModel.get_document(products.objects,{'id':json_req['id']})
-    if products_obj:
-        products_obj.is_active = json_req['is_active']
-        for i in products_obj.options:
-            i.is_active = json_req['is_active']
-            i.save()
-        products_obj.save()
-    data = dict()
-    data['is_update'] = True
-    return data
+    try:
+        json_req = JSONParser().parse(request)
+        product_id = json_req['id']
+        new_status = json_req['is_active']
+        products.objects(id=product_id).update_one(set__is_active=new_status)
+        product_obj = products.objects.get(id=product_id)
+        option_ids = [opt.id for opt in product_obj.options]
+        product_varient.objects(id__in=option_ids).update(set__is_active=new_status)
+        updated_product = products.objects.get(id=product_id)
+        print("Full object:", updated_product.to_mongo())
+        return {'is_update': True}
+    except Exception as e:
+        print(f" Error occured while updating product status",{e})
 
 @csrf_exempt
 def UpdateVarientActiveInActive(request):
@@ -4269,9 +4271,9 @@ def build_breadcrumb(category_id, level):
         current_level_num -= 1
     
     # Add root category (level-0)
-    if current_level_num == 1:
-        root_name = get_root_category_name(current_id)
-        breadcrumb.append(root_name)
+    # if current_level_num == 1:
+    #     root_name = get_root_category_name(current_id)
+    #     breadcrumb.append(root_name)
     
     breadcrumb.reverse()
     full_path = " > ".join(breadcrumb + [current_name])
