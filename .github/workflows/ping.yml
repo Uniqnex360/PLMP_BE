@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Ping Render app
         run: |
-          curl -X GET https://plmp-be.onrender.com
+          curl -X GET https://plmp-be-f3qy.onrender.com
