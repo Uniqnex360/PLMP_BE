@@ -1945,57 +1945,69 @@ def logForCreateProductVarient(product_varient_id,user_id,action,dict_datas):
 
 @csrf_exempt
 def obtainCategoryLog(request):
-    client_id = get_current_client()
-    json_req = json.loads(request.body.decode("utf-8")) if request.body else {}
-    action = json_req.get("action", None)
-    level = json_req.get("level", None)
-    if action:
-        filter_obj = {'action':action}
-    elif level:
-        filter_obj = {'level':level}
-    else:
-        filter_obj = {}
-    pipeline = [
-        {
-            "$match": filter_obj
-        },
-        {
+    try:
+        client_id = get_current_client()
+        json_req = json.loads(request.body.decode("utf-8")) if request.body else {}
+        action = json_req.get("action", None)
+        level = json_req.get("level", None)
+        if action:
+            filter_obj = {'action':action}
+        elif level:
+            filter_obj = {'level':level}
+        else:
+            filter_obj = {}
+        pipeline = [
+            {
+                "$match": filter_obj
+            },
+            {
             '$lookup': {
                 'from': 'user',
-                'localField': 'user_id',
-                'foreignField': '_id',
+                'let': {'user_id': '$user_id'},
+                'pipeline': [
+                    {
+                        '$match': {
+                            '$expr': {'$eq': ['$_id', '$$user_id']},
+                            'client_id': ObjectId(client_id) 
+                        }
+                    }
+                ],
                 'as': 'user_ins'
-        }
+            }
+        },
+        {
+            '$match': {'user_ins': {'$ne': []}}  
         },
         {
             '$unwind': {
                 'path': '$user_ins',
-                'preserveNullAndEmptyArrays': True
+                'preserveNullAndEmptyArrays': False
             }
-        },{
-            '$match':{'user_ins.client_id':ObjectId(client_id)}
         },
-        {
-            '$group': {
-                "_id":None,
-                "category_log_list":{'$push':{"user_name":"$user_ins.name",'category_id':'$category_id','action':'$action','level':'$level','log_date':'$log_date','data':'$data'}}
-        }
-        }
-        ]
-    result = list(category_log.objects.aggregate(*pipeline))
-    data = dict()
-    data['result'] = []
-    if result:
-        for i in result[0]['category_log_list']:
-            i['category_last_name'] = ""
-            getCategoryLevelOrder(i)
-            original_date = i['log_date'] 
-            i['log_date_ist'] = convert_to_timezone(original_date, 'Asia/Kolkata').strftime('%Y-%m-%d %H:%M:%S')
-            i['log_date'] = convert_to_timezone(original_date, 'US/Eastern').strftime('%Y-%m-%d %H:%M:%S')
-        data['result'] = result[0]['category_log_list']
-        data['result'] = sorted(data['result'], key=lambda x: x['log_date'],reverse=True)
+            {
+                '$group': {
+                    "_id":None,
+                    "category_log_list":{'$push':{"user_name":"$user_ins.name",'category_id':'$category_id','action':'$action','level':'$level','log_date':'$log_date','data':'$data'}}
+            }
+            }
+            ]
+        result = list(category_log.objects.aggregate(pipeline))
+        data = dict()
+        data['result'] = []
+        if result:
+            for i in result[0]['category_log_list']:
+                i['category_last_name'] = ""
+                getCategoryLevelOrder(i)
+                original_date = i['log_date'] 
+                i['log_date_ist'] = convert_to_timezone(original_date, 'Asia/Kolkata').strftime('%Y-%m-%d %H:%M:%S')
+                i['log_date'] = convert_to_timezone(original_date, 'US/Eastern').strftime('%Y-%m-%d %H:%M:%S')
+            data['result'] = result[0]['category_log_list']
+            data['result'] = sorted(data['result'], key=lambda x: x['log_date'],reverse=True)
+            return data
         return data
-    return data
+    except Exception as e:
+        print(f"Error in obtainCategoryLog: {str(e)}")
+        return {'result': [], 'error': str(e)}
 
 
 @csrf_exempt
@@ -2291,38 +2303,69 @@ from django.http import JsonResponse
 def obtainBrand(request):
     client_id = get_current_client()
     brand_id = request.GET.get('id')
-    
-    match_filter = {'client_id': ObjectId(client_id)}
-    if brand_id:
-        match_filter['id'] = ObjectId(brand_id)
-    
-    brand_list = brand.objects.filter(**match_filter).order_by('-_id')
     base_url = f"{request.scheme}://{request.get_host()}/"
     
-    result = []
-    for b in brand_list:
-        product_models = products.objects.filter(brand_id=str(b.id))
-        sku_count = sum(len(p.options or []) for p in product_models)
-        
-        item = {
-            'id': str(b.id),
-            'brand_number': b.brand_number or "",
-            'name': b.name or "",
-            'email': b.email or "",
-            'mobile_number': b.mobile_number or "",
-            'address': b.address or "",
-            'city': b.city or "",
-            'state': b.state or "",
-            'zip_code': b.zip_code or "",
-            'website': b.website or "",
-            'logo': base_url + b.logo.lstrip('/') if b.logo else "",
-            'number_of_feeds': getattr(b, 'number_of_feeds', None),
-            'product_count': product_models.count(),
-            'sku_count': sku_count
-        }
-        result.append(item)
+    # Build match stage
+    match_stage = {'client_id': ObjectId(client_id)}
+    if brand_id:
+        match_stage['_id'] = ObjectId(brand_id)
     
-    return {                       # ← RETURN RAW DICT (this is what your middleware wants)
+    # Single aggregation with $lookup
+    pipeline = [
+        {'$match': match_stage},
+        {'$sort': {'_id': -1}},
+        {
+            '$lookup': {
+                'from': 'products',  # Your products collection name
+                'let': {'brand_id': {'$toString': '$_id'}},
+                'pipeline': [
+                    {'$match': {'$expr': {'$eq': ['$brand_id', '$$brand_id']}}},
+                    {
+                        '$group': {
+                            '_id': None,
+                            'product_count': {'$sum': 1},
+                            'sku_count': {'$sum': {'$size': {'$ifNull': ['$options', []]}}}
+                        }
+                    }
+                ],
+                'as': 'product_stats'
+            }
+        },
+        {
+            '$addFields': {
+                'stats': {'$arrayElemAt': ['$product_stats', 0]}
+            }
+        },
+        {
+            '$project': {
+                '_id': 0,
+                'id': {'$toString': '$_id'},
+                'brand_number': {'$ifNull': ['$brand_number', '']},
+                'name': {'$ifNull': ['$name', '']},
+                'email': {'$ifNull': ['$email', '']},
+                'mobile_number': {'$ifNull': ['$mobile_number', '']},
+                'address': {'$ifNull': ['$address', '']},
+                'city': {'$ifNull': ['$city', '']},
+                'state': {'$ifNull': ['$state', '']},
+                'zip_code': {'$ifNull': ['$zip_code', '']},
+                'website': {'$ifNull': ['$website', '']},
+                'logo': {
+                    '$cond': {
+                        'if': {'$and': [{'$ne': ['$logo', None]}, {'$ne': ['$logo', '']}]},
+                        'then': {'$concat': [base_url, {'$ltrim': {'input': '$logo', 'chars': '/'}}]},
+                        'else': ''
+                    }
+                },
+                'number_of_feeds': '$number_of_feeds',
+                'product_count': {'$ifNull': ['$stats.product_count', 0]},
+                'sku_count': {'$ifNull': ['$stats.sku_count', 0]}
+            }
+        }
+    ]
+    
+    result = list(brand.objects.aggregate(pipeline))
+    
+    return {
         'brand_list': result,
         'brand_count': len(result)
     }
@@ -3099,22 +3142,53 @@ def saveXlData(request):
     return data
 
 def obtainPriceLog(request):
-    data = dict()
-    client_id = get_current_client()
-    radial_price_log_list = DatabaseModel.list_documents(radial_price_log.objects,{'client_id':client_id})
-    data = dict()
-    data['result']  = list()
-    for i in radial_price_log_list:
-        data['result'].append(
-        {
-        "sku_number" : i.product_varient_id.sku_number,
-        "old_retail_price" : i.old_retail_price,
-        "new_retail_price" : i.new_retail_price,
-        "user_id" : i.user_id.name,
-        "log_date" : convert_to_timezone(i.log_date, 'US/Eastern').strftime('%Y-%m-%d %H:%M:%S')
-        })
-    data['result'] = sorted(data['result'], key=lambda x: x['log_date'],reverse=True)
-    return data
+    try:
+        client_id = get_current_client()
+        pipeline = [
+    {'$match': {'client_id': ObjectId(client_id)}},
+    {'$sort': {'log_date': -1}},
+    {
+        '$lookup': {
+            'from': 'product_varient',
+            'localField': 'product_varient_id',
+            'foreignField': '_id',
+            'as': 'product_info'
+        }
+    },
+    {
+        '$lookup': {
+            'from': 'user',
+            'localField': 'user_id',
+            'foreignField': '_id',
+            'as': 'user_info'
+        }
+    },
+    {
+        '$project': {
+            '_id': 0,
+            'sku_number': {
+                '$ifNull': [
+                    {'$arrayElemAt': ['$product_info.sku_number', 0]},
+                    'Unknown'
+                ]
+            },
+            'old_retail_price': 1,
+            'new_retail_price': 1,
+            'user_id': {
+                '$ifNull': [
+                    {'$arrayElemAt': ['$user_info.name', 0]},
+                    'Unknown User'
+                ]
+            },
+            'log_date': 1
+        }
+    }
+]
+        result_list = list(radial_price_log.objects.aggregate(pipeline))
+        
+        return result_list
+    except Exception as e:
+        print(f"Error in obtainPriceLog: {str(e)}")
 # import requests
 # from bs4 import BeautifulSoup
 from django.http import JsonResponse # type: ignore
