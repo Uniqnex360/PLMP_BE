@@ -3601,7 +3601,12 @@ def obtainVarientOptionForRetailPrice(request):
     varient_option_list = DatabaseModel.list_documents(varient_option.objects, {'client_id': ObjectId(client_id)})
     unique_ids = set()
     for i in varient_option_list:
-        option_id = str(i.option_name_id.id)
+        try:
+            option_id = str(i.option_name_id.id)
+        except:
+            continue
+            
+            
         # if option_id not in unique_ids:
         unique_ids.add(option_id)
         collections = [
@@ -4571,37 +4576,30 @@ def obtainVarientOptions(request):
                 'as': 'type_value'
             }
         },
+        {'$unwind': {'path': '$type_value', 'preserveNullAndEmptyArrays': True}},
         {
             '$group': {
-                "_id": {
-                    "varient_option": "$varient_option",
-                    "type_name": "$type_name",
-                    "category_id": "$category_id",
-                    "category_level": "$category_level",
-                    "category_varient_id": "$_id"
-                },
-                "type_values": {'$push': '$type_value'}
+                    "_id": "$varient_option._id",
+                    "type_name": {"$first": "$type_name.name"},
+                    "varient_option_id": {"$first": "$varient_option._id"}, 
+                    "type_id": {"$first": "$type_name._id"},
+                    "category_id": {"$first": "$category_id"},
+                    "option_value_list": {
+            '$push': { 
+                'type_value_name': "$type_value.name",
+                'type_value_id': {"$toString": "$type_value._id"} 
+            }
+        }
             }
         },
         {
             '$project': {
                 "_id": 0,
-                "type_name": "$_id.type_name.name",
-                "varient_option_id": "$_id.varient_option._id",
-                "type_id": "$_id.type_name._id",
-                "category_varient_id": "$_id.category_varient_id",
-                "category_id": "$_id.category_id",
-                "category_level": "$_id.category_level",
-                'option_value_list': {
-                    '$map': {
-                        'input': "$type_values",
-                        'as': "tv",
-                        'in': {
-                            'type_value_name': "$$tv.name",
-                            'type_value_id': "$$tv._id",
-                        }
-                    }
-                }
+                "type_name": 1,
+                "varient_option_id": {"$toString": "$varient_option_id"},
+                "type_id": {"$toString": "$type_id"},
+                "category_id": {"$toString": "$category_id"},
+                'option_value_list': 1,
             }
         }
     ]
@@ -4621,8 +4619,6 @@ def obtainVarientOptions(request):
             
             processed_results = []
             for i in result:
-                i['type_id'] = str(i.get('type_id', ''))
-                data['category_varient_id'] = str(i.get('category_varient_id', ''))
                 
                 # Add category name if available
                 if not category_id and 'category_id' in i:
@@ -4631,15 +4627,12 @@ def obtainVarientOptions(request):
                         i['type_name'] = f"{i.get('type_name', '')} ({category_name})"
                 
                 # Clean up and convert IDs
-                if 'category_varient_id' in i:
-                    del i['category_varient_id']
                 
-                i['varient_option_id'] = str(i.get('varient_option_id', ''))
                 
                 # Process option values
-                option_values = i.get('option_value_list', [])
-                for j in option_values:
-                    j['type_value_id'] = str(j.get('type_value_id', ''))
+                # option_values = i.get('option_value_list', [])
+                # for j in option_values:
+                #     j['type_value_id'] = str(j.get('type_value_id', ''))
                 
                 processed_results.append(i)
             
