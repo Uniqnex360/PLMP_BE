@@ -2291,7 +2291,6 @@ from django.http import JsonResponse
 def obtainBrand(request):
     client_id = get_current_client()
     brand_id = request.GET.get('id')
-    print("///////////////////////////////",brand_id)
     
     match_filter = {'client_id': ObjectId(client_id)}
     if brand_id:

@@ -106,7 +106,6 @@ def check_role_and_capability(request, role_name):
     is_accessible = False
     capability_obj = DatabaseModel.get_document(capability.objects, {"action_name": action, "role_list__in": [role_name]})
     
-    print('capability_obj', capability_obj)
     
     if capability_obj != None:
         is_accessible = True 
