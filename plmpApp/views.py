@@ -1,3 +1,4 @@
+from __future__ import annotations
 from django.http import JsonResponse # type: ignore
 from .models import products
 from .models import varient_option
@@ -1763,7 +1764,6 @@ def obtainDashboardCount(request):
         # Get counts from individual collections
         total_product = products.objects(client_id=ObjectId(client_id)).count()
         total_brand = brand.objects(client_id=ObjectId(client_id)).count()
-        
         # Get category stats using the original logic
         last_all_ids = []
         category_list = DatabaseModel.list_documents(category.objects, {'client_id': client_id})
@@ -1774,7 +1774,13 @@ def obtainDashboardCount(request):
             key = (str(category_obj.id), category_obj.name)
             if key[1] not in seen:
                 seen.add(key[1])
-                parent_level_category_list.append({'id': key[0], 'name': key[1]})
+                parent_end_level_ids=[]
+                traverse_categories(category_obj,parent_end_level_ids)
+                product_count=0
+                for end_cat in parent_end_level_ids:
+                    count=DatabaseModel.count_documents(product_category_config.objects,{'category_id':str(end_cat['id'])})
+                    product_count+=count
+                parent_level_category_list.append({'id': key[0], 'name': key[1],'product_count':product_count})
             traverse_categories(category_obj, last_all_ids)
         
         category_project_dict = {}
@@ -2299,7 +2305,6 @@ def createBrand(request):
     return data
 
 from django.http import JsonResponse
-
 def obtainBrand(request):
     client_id = get_current_client()
     brand_id = request.GET.get('id')
@@ -2316,10 +2321,16 @@ def obtainBrand(request):
         {'$sort': {'_id': -1}},
         {
             '$lookup': {
-                'from': 'products',  # Your products collection name
-                'let': {'brand_id': {'$toString': '$_id'}},
+                'from': 'products',
+                'let': {'brand_id': '$_id'},  # ✅ Keep as ObjectId (removed $toString)
                 'pipeline': [
-                    {'$match': {'$expr': {'$eq': ['$brand_id', '$$brand_id']}}},
+                    {
+                        '$match': {
+                            '$expr': {
+                                '$eq': ['$brand_id', '$$brand_id']  # ✅ Now both are ObjectId
+                            }
+                        }
+                    },
                     {
                         '$group': {
                             '_id': None,
