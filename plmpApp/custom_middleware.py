@@ -6,6 +6,7 @@ from plmp_backend.env import SIMPLE_JWT
 import jwt # type: ignore
 from rest_framework import status # type: ignore
 from rest_framework.renderers import JSONRenderer # type: ignore
+import traceback
 
 
 def check_ignore_authentication_for_url(request):
@@ -16,7 +17,48 @@ def check_ignore_authentication_for_url(request):
     #     return False 
     result_obj = DatabaseModel.get_document(ignore_calls.objects, {"name__in": path})
     return result_obj is not None  
-
+def ensure_serializable(data, path="root"):
+    """
+    Recursively ensure all data is JSON serializable.
+    Converts model instances to their ID or string representation.
+    """
+    if data is None:
+        return None
+    
+    if isinstance(data, (str, int, float, bool)):
+        return data
+    
+    if isinstance(data, dict):
+        result = {}
+        for key, value in data.items():
+            result[key] = ensure_serializable(value, path=f"{path}.{key}")
+        return result
+    
+    if isinstance(data, (list, tuple)):
+        return [ensure_serializable(item, path=f"{path}[{i}]") for i, item in enumerate(data)]
+    
+    # Handle Django model instances
+    if hasattr(data, 'pk'):
+        print(f"⚠️ Found model instance at {path}: {data.__class__.__name__} (pk={data.pk})")
+        return data.pk
+    
+    # Handle QuerySet
+    if hasattr(data, '__iter__') and hasattr(data, 'model'):
+        print(f"⚠️ Found QuerySet at {path}: {data.model.__name__}")
+        return list(data.values())
+    
+    # Handle any other non-serializable object
+    print(f"⚠️ Found non-serializable object at {path}: {data.__class__.__name__}")
+    
+    # Try to convert to dict if possible
+    if hasattr(data, '__dict__'):
+        return ensure_serializable(data.__dict__, path=f"{path}.__dict__")
+    
+    # Fallback to string representation
+    try:
+        return str(data)
+    except Exception:
+        return f"<Non-serializable: {type(data).__name__}>"
 def skip_for_paths():
     """
     Decorator for skipping middleware based on path
@@ -146,7 +188,16 @@ class CustomMiddleware:
                 if check_role_and_capability(request, role):
                     res = self.get_response(request)
                     if isinstance(res, Response):
-                        response.data['data'] = res.data
+                        print("=" * 60)
+                        print("📦 RAW RESPONSE DATA FROM VIEW:")
+                        print(f"Type: {type(res.data)}")
+                        try:
+                            import json
+                            print(json.dumps(res.data, indent=2, default=lambda o: f"<{o.__class__.__name__}: {getattr(o, 'pk', 'N/A')}>"))
+                        except:
+                            print(res.data)
+                        print("=" * 60)
+                        response.data['data'] = ensure_serializable(res.data)
                         if isinstance(res.data, dict):
                             if res.data.get('STATUS_CODE') == 401:
                                 response.status_code = status.HTTP_401_UNAUTHORIZED
@@ -161,23 +212,46 @@ class CustomMiddleware:
                 response.status_code = status.HTTP_401_UNAUTHORIZED
                 response.data['message'] = 'Invalid token'
         except Exception as e:
-            print("Exception Class --", e.__class__)
-            print("Exception Class name --", e.__class__.__name__)
-            print("Exception --")
-            print(e)
-            response.data['data'] = False
-            if (e.__class__.__name__ == 'ExpiredSignatureError' or e.__class__.__name__ == 'DecodeError'):
+            print("=" * 60)
+            print("🔴 ACTUAL ERROR:")
+            print("=" * 60)
+            print(f"Exception: {e.__class__.__name__}: {str(e)}")
+            traceback.print_exc()
+            print("=" * 60)
+            if e.__class__.__name__ in ['ExpiredSignatureError', 'DecodeError']:
                 response.status_code = status.HTTP_401_UNAUTHORIZED
                 response.data['message'] = 'Invalid token'
             elif e.__class__.__name__ == 'ValidationError':
-                print(str(e))
-                print(e.message)
+                response.status_code = status.HTTP_400_BAD_REQUEST
+                response.data['message'] = str(e)
             else:
                 response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+                response.data['message'] = f'Error: {str(e)}'
         response.accepted_renderer = JSONRenderer()
         response.accepted_media_type = "application/json"
         response.renderer_context = {}
-        response.render()
+        response.data = ensure_serializable(response.data)
+        try:
+            response.render()
+        except TypeError as e:
+            print("=" * 60)
+            print("🔴 SERIALIZATION ERROR:")
+            traceback.print_exc()
+            print("=" * 60)
+        
+        # Return safe error response
+            error_response = Response({
+            'data': None,
+            'emessage': f'Serialization error: {str(e)}',
+            'estatus': False
+            })
+            error_response.status_code = 500
+            error_response.accepted_renderer = JSONRenderer()
+            error_response.accepted_media_type = "application/json"
+            error_response.renderer_context = {}
+            error_response.render()
+            return error_response
+        
         return response
 
 
