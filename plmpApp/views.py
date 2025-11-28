@@ -13,6 +13,7 @@ from .models import product_varient_option
 from .models import product_varient
 from .models import category_log
 from .models import product_log
+from django.views.decorators.cache import cache_page
 from .models import product_varient_log
 from .models import category_varient_option_log
 from .models import category_varient
@@ -3735,65 +3736,113 @@ def createUser(request):
 
 @csrf_exempt
 def obtainVarientOptionForRetailPrice(request):
-    data = dict()
-    data['varient_option_list'] = []
-    client_id = get_current_client()
-    varient_option_list = DatabaseModel.list_documents(varient_option.objects, {'client_id': ObjectId(client_id)})
-    unique_ids = set()
-    for i in varient_option_list:
-        try:
-            option_id = str(i.option_name_id.id)
-        except:
-            continue
-            
-            
-        # if option_id not in unique_ids:
-        unique_ids.add(option_id)
+    try:
+        data = {'varient_option_list': []}
+        client_id = get_current_client()
+        
+        if not client_id:
+            logger.error("No client_id found in request")
+            return {'error': 'Client not found', 'varient_option_list': []}
+        
+        # Get all variant options for client
+        varient_option_list = list(DatabaseModel.list_documents(
+            varient_option.objects, 
+            {'client_id': ObjectId(client_id)}
+        ))
+        
+        if not varient_option_list:
+            return data
+        
+        # Collect all category IDs upfront
+        category_ids = []
+        for variant in varient_option_list:
+            if variant.category_str:
+                category_ids.append(variant.category_str)
+        
+        # Batch fetch all categories (avoiding N+1)
+        category_map = {}
         collections = [
-            category,
-            level_five_category,
-            level_four_category,
-            level_three_category,
-            level_two_category,
-            level_one_category
+            (category, "category"),
+            (level_five_category, "level_five"),
+            (level_four_category, "level_four"),
+            (level_three_category, "level_three"),
+            (level_two_category, "level_two"),
+            (level_one_category, "level_one")
         ]
-
-        category_name = None
-        category_id = None
-        brand_id=None
-
-        for collection in collections:
+        
+        for collection, level in collections:
             try:
-                # Use this line if you're using MongoEngine
-                category_obj = collection.objects(id=i.category_str).first()
-
-                # Use this line instead if you're using PyMongo
-                # category_obj = collection.find_one({'id': i['category_id']})
-
-                if category_obj:
-                    
-                    category_name = category_obj.name
-                    category_id = str(category_obj.id)
-                    break
+                categories = collection.objects(id__in=category_ids).only('id', 'name')
+                for cat in categories:
+                    category_map[str(cat.id)] = {
+                        'name': cat.name,
+                        'id': str(cat.id),
+                        'level': level
+                    }
             except Exception as e:
-                print(f"Error checking collection {collection}: {e}")
-
-        if category_id:
-            product_config = DatabaseModel.get_document(
-                product_category_config.objects,
-                {'category_id': category_id}
-            )
-            if product_config and product_config.product_id:
-                if product_config.product_id.brand_id:
-                    brand_id = str(product_config.product_id.brand_id.id)
-                    print(f" Found brand_id: {brand_id} for category: {category_name}")
-            else:
-                print(f" No product found for category: {category_name}")
-        if category_name:
-            i.option_name_id.name = i.option_name_id.name +" " +"("+ category_name+")"
-        data['varient_option_list'].append({'id': str(i.id), "name": i.option_name_id.name,"brand_id": brand_id})
-    return data
-
+                logger.error(f"Error fetching {level} categories: {e}")
+        
+        # Batch fetch all product configs
+        product_configs = list(product_category_config.objects(
+    category_id__in=list(category_map.keys())
+))
+        
+        # Create mapping of category_id to brand_id
+        category_brand_map = {}
+        for pc in product_configs:
+            try:
+                if pc.product_id and pc.product_id.brand_id:
+                    category_brand_map[pc.category_id] = str(pc.product_id.brand_id.id)
+            except Exception as e:
+                logger.warning(f"Error processing product config: {e}")
+        
+        # Process variant options
+        seen_option_ids = set()
+        
+        for variant in varient_option_list:
+            try:
+                # Skip if option_name_id is invalid
+                if not variant.option_name_id:
+                    continue
+                    
+                option_id = str(variant.option_name_id.id)
+                
+                # Skip duplicates if needed
+                # if option_id in seen_option_ids:
+                #     continue
+                seen_option_ids.add(option_id)
+                
+                # Get category info
+                category_info = category_map.get(variant.category_str, {})
+                category_name = category_info.get('name')
+                category_id = category_info.get('id')
+                
+                # Get brand_id from mapping
+                brand_id = category_brand_map.get(category_id)
+                
+                # Format name with category
+                display_name = variant.option_name_id.name
+                if category_name:
+                    display_name = f"{variant.option_name_id.name} ({category_name})"
+                
+                data['varient_option_list'].append({
+                    'id': str(variant.id),
+                    'name': display_name,
+                    'brand_id': brand_id
+                })
+                
+            except Exception as e:
+                logger.error(f"Error processing variant option {variant.id}: {e}")
+                continue
+        
+        return data
+        
+    except Exception as e:
+        logger.exception(f"Error in obtainVarientOptionForRetailPrice: {e}")
+        return {
+            'error': 'An error occurred processing the request',
+            'varient_option_list': []
+        }
 
 @csrf_exempt
 def obtainVarientOptionValueForRetailPrice(request):
