@@ -3089,6 +3089,7 @@ def saveXlData(request):
                 elif len(category_list) == 6:
                     category_level = "level-6"
                 product_category_config_obj = DatabaseModel.save_documents(product_category_config,{'product_id':product_id,'category_level':category_level,"category_id":str(previous_category_id)})
+                category_id = str(previous_category_id)  
             else:
                 product_id = product_obj.id
                 if not is_varient:
@@ -3106,17 +3107,20 @@ def saveXlData(request):
                     logForCreateProduct(product_id,user_login_id,"Updated",update_dict)
                     if model_key:
                         product_cache[model_key]=product_id
-            product_obj.image = img_src
-            product_obj.save()
-            product_category_config_obj = DatabaseModel.get_document(product_category_config.objects,{'product_id':product_id})
+            # product_obj.image = img_src
+            # product_obj.save()
+            # product_category_config_obj = DatabaseModel.get_document(product_category_config.objects,{'product_id':product_id})
             cat_retail_price = 1
             retail_price = "0"
             if Finished_Price == None:
                 Finished_Price = "0"
             if Un_Finished_Price == None:
                 Un_Finished_Price = "0"
-            if product_category_config_obj:
-                category_id = product_category_config_obj.category_id
+            if 'category_id' not in locals():
+                product_category_config_obj = DatabaseModel.get_document(product_category_config.objects,{'product_id':product_id})
+                category_id = product_category_config_obj.category_id if product_category_config_obj else None
+
+            if category_id:
                 brand_category_price_obj = DatabaseModel.get_document(brand_category_price.objects,{'category_id':ObjectId(category_id),'brand_id':product_obj.brand_id.id,'is_active':True})
                 if brand_category_price_obj:
                     cat_retail_price = brand_category_price_obj.price
@@ -3131,8 +3135,7 @@ def saveXlData(request):
             if Variant_SKU not in variants_cache:
                 product_varient_obj = DatabaseModel.save_documents(product_varient,{"sku_number":Variant_SKU,"finished_price":str(Finished_Price),"un_finished_price":str(Un_Finished_Price),"quantity":str(stockv),"retail_price":retail_price})
                 variants_cache[Variant_SKU] = product_varient_obj.id
-                createradial_price_log(product_varient_obj.id,"0",retail_price,user_login_id,client_id)
-                logForCreateProductVarient(product_varient_obj.id,user_login_id,"Created",{})
+                bulk_price_logs.append({'variant_id': product_varient_obj.id,'old_price': "0",'new_price': retail_price,'user_id': user_login_id,'client_id': client_id})
                 for i in options:
                     type_name_key=i['name'].title().lower()
                     if type_name_key in type_names_cache:
@@ -3262,6 +3265,16 @@ def saveXlData(request):
     if bulk_logs:
         for log_item in bulk_logs:
             logForCategory(log_item['cat_id'], log_item['action'], log_item['user'], log_item['level'], {})
+    if bulk_price_logs:
+        logger.info(f"Creating {len(bulk_price_logs)} price logs...")
+        for log_item in bulk_price_logs:
+            createradial_price_log(
+            log_item['variant_id'],
+            log_item['old_price'],
+            log_item['new_price'],
+            log_item['user_id'],
+            log_item['client_id']
+        )
     logger.info(f"Processed {len(bulk_logs)} category logs")
     data['status'] = True
     
