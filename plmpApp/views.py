@@ -3119,7 +3119,7 @@ def saveXlData(request):
             if 'category_id' not in locals():
                 product_category_config_obj = DatabaseModel.get_document(product_category_config.objects,{'product_id':product_id})
                 category_id = product_category_config_obj.category_id if product_category_config_obj else None
-
+         
             if category_id:
                 brand_category_price_obj = DatabaseModel.get_document(brand_category_price.objects,{'category_id':ObjectId(category_id),'brand_id':product_obj.brand_id.id,'is_active':True})
                 if brand_category_price_obj:
