@@ -274,7 +274,7 @@ class category(Document):
         self.category_number = 'CAT-1-'+str(category_number_var)
         return super(category, self).save(*args, **kwargs)
 class type_name(Document):
-    name = fields.StringField()
+    name = fields.StringField(required=True)
 
 
 class type_value(Document):

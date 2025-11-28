@@ -2693,7 +2693,65 @@ def saveXlData(request):
     images_key = field_data.get('Image Src')
     
     client_id = get_current_client()
-    
+    brands_cache={}
+    for b in brand.objects.filter(client_id=client_id).only('id','name'):
+        brands_cache[b.name.lower()]=b.id 
+    type_names_cache={}
+    for t in type_name.objects.only('id','name'):
+        type_names_cache[t.name.lower()]=t.id  
+    type_values_cache={}
+    for t in type_value.objects.only('id','name'):
+        type_values_cache[t.name.lower()]=t.id 
+    categories_cache={
+        'level_0':{},
+        'level_1':{},
+        "level_2":{},
+        "level_3":{},
+        "level_4":{},
+        "level_5":{}
+    }
+    for c in category.objects.filter(client_id=client_id).only('id','name'):
+        categories_cache['level_0'][c.name.lower()]=c.id  
+    for c in level_one_category.objects.filter(client_id=client_id).only('id','name'):
+        categories_cache['level_1'][c.name.lower()]=c.id  
+    for c in level_two_category.objects.filter(client_id=client_id).only('id','name'):
+        categories_cache['level_2'][c.name.lower()]=c.id  
+    for c in level_three_category.objects.filter(client_id=client_id).only('id','name'):
+        categories_cache['level_3'][c.name.lower()]=c.id  
+    for c in level_four_category.objects.filter(client_id=client_id).only('id','name'):
+        categories_cache['level_4'][c.name.lower()]=c.id  
+    for c in level_five_category.objects.filter(client_id=client_id).only('id','name'):
+        categories_cache['level_5'][c.name.lower()]=c.id  
+    products_cache={}
+    for p in products.objects.filter(client_id=client_id).only('id','model','brand_id','options'):
+        if p.model:
+            products_cache[p.model.strip().lower()]=p.id  
+    variants_cache={}
+    for v in product_varient.objects.filter(client_id=client_id).only('id','sku_number'):
+        variants_cache[v.sku_number]=v.id   
+    products_category_cache={}
+    for pc in product_category_config.objects.only('product_id','category_id','category_level'):
+        products_category_cache[str(pc.product_id.id)]={
+            'category_id':pc.category_id,
+            'category_level':pc.category_level
+        }
+    varient_options_cache = {}
+    for vo in varient_option.objects.filter(client_id=client_id).only('id','option_name_id','category_str','option_value_id_list'):
+        key=f"{vo.option_name_id.id}_{vo.category_str}"
+        varient_options_cache[key]={
+            'id': vo.id,
+            'option_value_ids': [str(v.id) for v in vo.option_value_id_list]
+        }
+    category_variants_cache={}
+    for cv in category_varient.objects.only('id','category_id','varient_option_id_list'):
+        category_variants_cache[cv.category_id]={
+            "id":cv.id ,
+            'variant_option_ids':[str(v.id) for v in cv.varient_option_id_list]
+        }
+    bulk_logs=[]
+    bulk_price_logs=[]
+    bulk_product_variant_options=[]
+    bulk_variant_options=[]
     # Read and parse file with encoding handling
     try:
         if not os.path.exists(file_path):
@@ -2875,12 +2933,22 @@ def saveXlData(request):
             # else:
             #     is_varient = False
             # model_key = str(model).strip() if model else None
-            if model_key and model_key in product_cache:
-                product_id=product_cache[model_key]
+            model_lookup_key=model_key.lower() if model_key else None
+            product_obj=None
+            is_varient=False
+            if model_lookup_key and model_lookup_key in products_cache:
+                product_id=products_cache[model_lookup_key]
                 product_obj = DatabaseModel.get_document(products.objects, {'id': product_id})
-                is_varient=True
-            else:
-                is_varient=False
+                if product_obj:
+                    is_varient=True
+                    logger.info(f"Found existing product in cache: {model} (ID: {product_id})")
+            if not product_obj and model_key:
+                product_obj = DatabaseModel.get_document(products.objects, {'model': model, 'client_id': ObjectId(client_id)})
+            if product_obj:
+                product_id = product_obj.id
+                products_cache[model_lookup_key] = product_id
+                is_varient = True
+                logger.info(f"Found existing product in DB: {model} (ID: {product_id})")
             option_name_list = list()
             option_number = 1
             while f'Option{option_number} Name' in row_dict and f'Option{option_number} Value' in row_dict:
@@ -2904,8 +2972,14 @@ def saveXlData(request):
             else:
                 img_src = []
             product_name = product_name.title()
+            # if not is_varient:
+            #     product_obj = DatabaseModel.get_document(products.objects,{'model':model,'client_id':ObjectId(client_id)})
             if not is_varient:
-                product_obj = DatabaseModel.get_document(products.objects,{'model':model,'client_id':ObjectId(client_id)})
+                if model_lookup_key in products_cache:
+                    product_id=products_cache[model_lookup_key]
+                    product_obj = DatabaseModel.get_document(products.objects, {'id': product_id})
+                else:
+                    product_obj=None
                 category_list=[]
                 if isinstance(category_level,str):
                     category_list = [item.strip() for item in category_level.split('>')]
@@ -2917,61 +2991,74 @@ def saveXlData(request):
                 previous_category_id = ""
                 for index,i in enumerate(category_list):
                     i = i.title()
+                    cat_key=i.lower()
                     if index == 0:
-                        category_obj = DatabaseModel.get_document(category.objects,{'name':i,'client_id':client_id})
-                        if category_obj == None:
+                        if cat_key in categories_cache['level_0']:
+                            category_id=categories_cache['level_0'][cat_key]
+                        else:    
                             category_obj = DatabaseModel.save_documents(category,{'name':i})
+                            category_id=category_obj.id 
+                            categories_cache['level_0'][cat_key]=category_id
+                            bulk_logs.append({'cat_id':category_id,'action':'Created',"user":user_login_id,'level':'level-1'})
                             logForCategory(category_obj.id,"Created",user_login_id,'level-1',{})
-                        previous_category_id = category_obj.id
-                    if index == 1:
-                        level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'name':i,'client_id':client_id})
-                        if level_one_category_obj == None:
-                            level_one_category_obj = DatabaseModel.save_documents(level_one_category,{'name':i})
-                            logForCategory(level_one_category_obj.id,"Created",user_login_id,'level-1',{})
-                        DatabaseModel.update_documents(category.objects,{"id":previous_category_id},{"add_to_set__level_one_category_list":level_one_category_obj.id})
-                        previous_category_id = level_one_category_obj.id
-                    if index == 2:
-                        level_two_category_obj = DatabaseModel.get_document(level_two_category.objects,{'name':i,'client_id':client_id})
-                        if level_two_category_obj == None:
-                            level_two_category_obj = DatabaseModel.save_documents(level_two_category,{'name':i})
-                            logForCategory(level_two_category_obj.id,"Created",user_login_id,'level-1',{})
-                            
-                        DatabaseModel.update_documents(level_one_category.objects,{"id":previous_category_id},{"add_to_set__level_two_category_list":level_two_category_obj.id})
-                        previous_category_id = level_two_category_obj.id
-                    if index == 3:
-                        level_three_category_obj = DatabaseModel.get_document(level_three_category.objects,{'name':i,'client_id':client_id})
-                        if level_three_category_obj == None:
-                            level_three_category_obj = DatabaseModel.save_documents(level_three_category,{'name':i})
-                            logForCategory(level_three_category_obj.id,"Created",user_login_id,'level-1',{})
-                            
-                        DatabaseModel.update_documents(level_two_category.objects,{"id":previous_category_id},{"add_to_set__level_three_category_list":level_three_category_obj.id})
-                        previous_category_id = level_three_category_obj.id
-                    if index == 4:
-                        level_four_category_obj = DatabaseModel.get_document(level_four_category.objects,{'name':i,'client_id':client_id})
-                        if level_four_category_obj == None:
-                            level_four_category_obj = DatabaseModel.save_documents(level_four_category,{'name':i})
-                            logForCategory(level_four_category_obj.id,"Created",user_login_id,'level-1',{})
-                            
-                        DatabaseModel.update_documents(level_three_category.objects,{"id":previous_category_id},{"add_to_set__level_four_category_list":level_four_category_obj.id})
-                        previous_category_id = level_four_category_obj.id
-                    if index == 5:
-                        level_five_category_obj = DatabaseModel.get_document(level_five_category.objects,{'name':i,'client_id':client_id})
-                        if level_five_category_obj == None:
-                            level_five_category_obj = DatabaseModel.save_documents(level_five_category,{'name':i})
-                            logForCategory(level_five_category_obj.id,"Created",user_login_id,'level-1',{})
-                            
-                        DatabaseModel.update_documents(level_four_category.objects,{"id":previous_category_id},{"add_to_set__level_five_category_list":level_five_category_obj.id})
-                        previous_category_id = level_five_category_obj.id
-                if brand_name.title() in optimize_dict:
-                    brand_id = optimize_dict[brand_name.title()] 
+                        previous_category_id = category_id
+                    elif index == 1:
+                        if cat_key in categories_cache['level_1']:
+                            level_one_id=categories_cache['level_1'][cat_key]
+                        else:
+                            level_one_obj = DatabaseModel.save_documents(level_one_category,{'name':i})
+                            level_one_id=level_one_obj.id
+                            categories_cache['level_1'][cat_key]=level_one_id
+                            bulk_logs.append({'cat_id': level_one_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                        DatabaseModel.update_documents(category.objects,{"id":previous_category_id},{"add_to_set__level_one_category_list":level_one_id})
+                        previous_category_id = level_one_id
+                    elif index == 2:
+                        if cat_key in categories_cache['level_2']:
+                            level_two_id = categories_cache['level_2'][cat_key]
+                        else:
+                            level_two_obj = DatabaseModel.save_documents(level_two_category, {'name': i})
+                            level_two_id = level_two_obj.id
+                            categories_cache['level_2'][cat_key] = level_two_id
+                            bulk_logs.append({'cat_id': level_two_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                        DatabaseModel.update_documents(level_one_category.objects, {"id": previous_category_id}, {"add_to_set__level_two_category_list": level_two_id})
+                        previous_category_id = level_two_id
+                    elif index == 3:
+                        if cat_key in categories_cache['level_3']:
+                            level_three_id = categories_cache['level_3'][cat_key]
+                        else:
+                            level_three_obj = DatabaseModel.save_documents(level_three_category, {'name': i})
+                            level_three_id = level_three_obj.id
+                            categories_cache['level_3'][cat_key] = level_three_id
+                            bulk_logs.append({'cat_id': level_three_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                        DatabaseModel.update_documents(level_two_category.objects, {"id": previous_category_id}, {"add_to_set__level_three_category_list": level_three_id})
+                        previous_category_id = level_three_id
+                    elif index == 4:
+                        if cat_key in categories_cache['level_4']:
+                            level_four_id = categories_cache['level_4'][cat_key]
+                        else:
+                            level_four_obj = DatabaseModel.save_documents(level_four_category, {'name': i})
+                            level_four_id = level_four_obj.id
+                            categories_cache['level_4'][cat_key] = level_four_id
+                            bulk_logs.append({'cat_id': level_four_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                        DatabaseModel.update_documents(level_three_category.objects, {"id": previous_category_id}, {"add_to_set__level_four_category_list": level_four_id})
+                        previous_category_id = level_four_id
+                    elif index == 5:
+                        if cat_key in categories_cache['level_5']:
+                            level_five_id = categories_cache['level_5'][cat_key]
+                        else:
+                            level_five_obj = DatabaseModel.save_documents(level_five_category, {'name': i})
+                            level_five_id = level_five_obj.id
+                            categories_cache['level_5'][cat_key] = level_five_id
+                            bulk_logs.append({'cat_id': level_five_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                        DatabaseModel.update_documents(level_four_category.objects, {"id": previous_category_id}, {"add_to_set__level_five_category_list": level_five_id})
+                        previous_category_id = level_five_id
+                brand_key = brand_name.title().lower()
+                if brand_key in brands_cache:
+                    brand_id=brands_cache[brand_key]
                 else:
-                    brand_obj = DatabaseModel.get_document(brand.objects,{'name':brand_name.title(),'client_id':client_id})
-                    if brand_obj:
-                        brand_id = brand_obj.id
-                    else:
-                        brand_obj = DatabaseModel.save_documents(brand,{'name':brand_name.title(),'client_id':client_id})
-                        brand_id = brand_obj.id
-                    optimize_dict[brand_name.title()]  = brand_id
+                    brand_obj = DatabaseModel.save_documents(brand,{'name':brand_name.title(),'client_id':client_id})
+                    brand_id = brand_obj.id
+                    brands_cache[brand_key] = brand_id
                 product_obj = DatabaseModel.save_documents(products,{"model":model,"upc_ean":str(upc_ean),'mpn':str(mpn),"product_name":product_name.title(),"long_description":long_description,"short_description":short_description,"brand_id":brand_id,"breadcrumb":breadcrumb,"key_features":str(key_features),'tags':Tags,'image':img_src,'option_str':option_str,'dimensions':dimensions})
                 product_id = product_obj.id
                 if model_key:
@@ -3028,37 +3115,62 @@ def saveXlData(request):
                         retail_price = str(float(Un_Finished_Price) * float(cat_retail_price))
                 else:
                     retail_price = str(float(Finished_Price) * float(1))
-            sku_number_list = [i.sku_number for i in product_obj.options]
-            sku_number_id_list = [i.id for i in product_obj.options]
-            if Variant_SKU not in sku_number_list:
+            # sku_number_list = [i.sku_number for i in product_obj.options]
+            # sku_number_id_list = [i.id for i in product_obj.options]
+            if Variant_SKU not in variants_cache:
                 product_varient_obj = DatabaseModel.save_documents(product_varient,{"sku_number":Variant_SKU,"finished_price":str(Finished_Price),"un_finished_price":str(Un_Finished_Price),"quantity":str(stockv),"retail_price":retail_price})
+                variants_cache[Variant_SKU] = product_varient_obj.id
                 createradial_price_log(product_varient_obj.id,"0",retail_price,user_login_id,client_id)
                 logForCreateProductVarient(product_varient_obj.id,user_login_id,"Created",{})
                 for i in options:
-                    if i['name'].title() in optimize_dict:
-                        type_name_id = optimize_dict[i['name'].title()] 
+                    type_name_key=i['name'].title().lower()
+                    if type_name_key in type_names_cache:
+                        type_name_id=type_names_cache[type_name_key]
+
                     else:
                         type_name_obj = DatabaseModel.get_document(type_name.objects,{'name':i['name'].title()})
-                        if type_name_obj ==None:
-                            type_name_obj = DatabaseModel.save_documents(type_name,{'name':i['name'].title()})   
-                        type_name_id = type_name_obj.id
-                        optimize_dict[i['name'].title()] = type_name_id
-                    if str(i['value']).title() in optimize_dict:
-                        type_value_id = optimize_dict[str(i['value']).title()] 
+                        if type_name_obj==None:
+                            type_name_obj = DatabaseModel.save_documents(type_name,{'name':i['name'].title()})
+                        type_name_id=type_name_obj.id 
+                        type_names_cache[type_name_key]=type_name_id
+                    type_value_key=str(i['value']).title().lower()
+                    if type_value_key in type_values_cache:
+                        type_value_id=type_values_cache[type_value_key]
                     else:
-                        type_value_obj = DatabaseModel.get_document(type_value.objects,{'name':str(i['value']).title()})
-                        if type_value_obj ==None:
-                            type_value_obj = DatabaseModel.save_documents(type_value,{'name':str(i['value']).title()})   
+                        type_value_obj = DatabaseModel.save_documents(type_value, {'name': str(i['value']).title()})
                         type_value_id = type_value_obj.id
-                        optimize_dict[str(i['value']).title()] = type_value_id
+                        type_values_cache[type_value_key] = type_value_id
+                        
+                    # if i['name'].title() in optimize_dict:
+                    #     type_name_id = optimize_dict[i['name'].title()] 
+                    # else:
+                    #     type_name_obj = DatabaseModel.get_document(type_name.objects,{'name':i['name'].title()})
+                    #     if type_name_obj ==None:
+                    #         type_name_obj = DatabaseModel.save_documents(type_name,{'name':i['name'].title()})   
+                    #     type_name_id = type_name_obj.id
+                    #     optimize_dict[i['name'].title()] = type_name_id
+                    # if str(i['value']).title() in optimize_dict:
+                    #     type_value_id = optimize_dict[str(i['value']).title()] 
+                    # else:
+                    #     type_value_obj = DatabaseModel.get_document(type_value.objects,{'name':str(i['value']).title()})
+                    #     if type_value_obj ==None:
+                    #         type_value_obj = DatabaseModel.save_documents(type_value,{'name':str(i['value']).title()})   
+                    #     type_value_id = type_value_obj.id
+                    #     optimize_dict[str(i['value']).title()] = type_value_id
                     product_varient_option_obj = DatabaseModel.save_documents(product_varient_option,{"option_name_id":type_name_id,"option_value_id":type_value_id})
                     DatabaseModel.update_documents(product_varient.objects,{"id":product_varient_obj.id},{"add_to_set__varient_option_id":product_varient_option_obj.id})
                     DatabaseModel.update_documents(products.objects,{"id":product_id},{"add_to_set__options":product_varient_obj.id,'add_to_set__image':image_str_list})
-                    varient_option_obj = DatabaseModel.get_document(varient_option.objects,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id})
-                    if varient_option_obj:
-                        DatabaseModel.update_documents(varient_option.objects,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id},{"add_to_set__option_value_id_list":type_value_id})
+                    vo_cache_key = f"{type_name_id}_{category_id}"
+                    if vo_cache_key in varient_options_cache:
+                        varient_option_obj_id = varient_options_cache[vo_cache_key]['id']
+                        if str(type_value_id) not in varient_options_cache[vo_cache_key]['option_value_ids']:
+                            DatabaseModel.update_documents(varient_option.objects, {"id": varient_option_obj_id}, {"add_to_set__option_value_id_list": type_value_id})
+                            varient_options_cache[vo_cache_key]['option_value_ids'].append(str(type_value_id))
+                        varient_option_obj = DatabaseModel.get_document(varient_option.objects, {"id": varient_option_obj_id})
                     else:
-                        varient_option_obj = DatabaseModel.save_documents(varient_option,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id,"option_value_id_list":[type_value_id]})
+                        varient_option_obj = DatabaseModel.save_documents(varient_option, {"option_name_id": type_name_id, 'category_str': str(category_id), 'client_id': client_id, "option_value_id_list": [type_value_id]})
+                        varient_options_cache[vo_cache_key] = {'id': varient_option_obj.id,'option_value_ids': [str(type_value_id)]}
+                    
 
                     category_varient_obj = DatabaseModel.get_document(category_varient.objects,{'category_id':str(category_id)})
                     if category_varient_obj == None:
@@ -3135,9 +3247,13 @@ def saveXlData(request):
             logger.warning(f"Upload directory {upload_dir} does not exist")
     except Exception as e:
         logger.error(f"Error deleting upload folder: {str(e)}")
-    
+    logger.info("Processing bulk logs...")
+    if bulk_logs:
+        for log_item in bulk_logs:
+            logForCategory(log_item['cat_id'], log_item['action'], log_item['user'], log_item['level'], {})
+    logger.info(f"Processed {len(bulk_logs)} category logs")
     data['status'] = True
-    logger.info(f"Processing complete. Total: {data['total_products']}, Added: {data['added_count']}, Errors: {data['error_count']}")
+    
     
     return data
 
