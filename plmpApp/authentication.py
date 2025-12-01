@@ -40,11 +40,12 @@ def loginUser(request):
 
         # --- valid user ---
         role_name = user_data_obj.role
+        first_name=user_data_obj.name
         client_id = "" if role_name == "super-admin" else str(user_data_obj.client_id)
 
         payload = {
             "id": str(user_data_obj.id),
-            "first_name": user_data_obj.name,
+            "first_name": first_name,
             "email": user_data_obj.email,
             "role_name": role_name.lower().replace(" ", "_"),
             "max_age": SIMPLE_JWT["SESSION_COOKIE_MAX_AGE"],
@@ -61,6 +62,7 @@ def loginUser(request):
             {
                 "user_login_id": str(user_data_obj.id),
                 "user_role": role_name,
+                "user_name":first_name,
                 "client_id": client_id,
                 "valid": True,
             }
