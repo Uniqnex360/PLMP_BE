@@ -90,7 +90,7 @@ class level_five_category(Document):
     meta = {
         'indexes': [
             {
-                'fields': ['name', 'client_id'],
+                'fields': ['name', 'client_id',"parent_id"],
                 'unique': True
             }
         ]
@@ -98,6 +98,7 @@ class level_five_category(Document):
     name = fields.StringField(required=True)
     category_number = fields.StringField()
     client_id = fields.ReferenceField(client)
+    parent_id = fields.ReferenceField('level_four_category') 
     def save(self, *args, **kwargs):
         from .global_service import DatabaseModel
         from .custom_middleware import get_current_client
@@ -119,7 +120,7 @@ class level_four_category(Document):
     meta = {
         'indexes': [
             {
-                'fields': ['name', 'client_id'],
+                'fields': ['name', 'client_id', 'parent_id'],
                 'unique': True
             }
         ]
@@ -127,6 +128,7 @@ class level_four_category(Document):
     name = fields.StringField(required=True)
     category_number = fields.StringField()
     client_id = fields.ReferenceField(client)
+    parent_id = fields.ReferenceField('level_three_category') 
     level_five_category_list = fields.ListField(fields.ReferenceField(level_five_category),default = [])
     def save(self, *args, **kwargs):
         from .global_service import DatabaseModel
@@ -149,7 +151,7 @@ class level_three_category(Document):
     meta = {
         'indexes': [
             {
-                'fields': ['name', 'client_id'],
+                'fields': ['name', 'client_id',"parent_id"],
                 'unique': True
             }
         ]
@@ -157,7 +159,7 @@ class level_three_category(Document):
     name = fields.StringField(required=True)
     category_number = fields.StringField()
     client_id = fields.ReferenceField(client)
-    
+    parent_id = fields.ReferenceField('level_two_category') 
     level_four_category_list = fields.ListField(fields.ReferenceField(level_four_category),default = [])
     def save(self, *args, **kwargs):
         from .global_service import DatabaseModel
@@ -180,7 +182,7 @@ class level_two_category(Document):
     meta = {
         'indexes': [
             {
-                'fields': ['name', 'client_id'],
+                'fields': ['name', 'client_id',"parent_id"],
                 'unique': True
             }
         ]
@@ -188,7 +190,7 @@ class level_two_category(Document):
     name = fields.StringField(required=True)
     category_number = fields.StringField()
     client_id = fields.ReferenceField(client)
-    
+    parent_id = fields.ReferenceField('level_one_category') 
     level_three_category_list = fields.ListField(fields.ReferenceField(level_three_category),default = [])
     def save(self, *args, **kwargs):
         from .global_service import DatabaseModel
@@ -212,7 +214,7 @@ class level_one_category(Document):
     meta = {
         'indexes': [
             {
-                'fields': ['name', 'client_id'],
+                'fields': ['name', 'client_id',"parent_id"],
                 'unique': True
             }
         ]
@@ -220,6 +222,7 @@ class level_one_category(Document):
     name = fields.StringField(required=True)
     category_number = fields.StringField()
     client_id = fields.ReferenceField(client)
+    parent_id=fields.ReferenceField('category')
     level_two_category_list = fields.ListField(fields.ReferenceField(level_two_category),default = [])
     def save(self, *args, **kwargs):
         from .global_service import DatabaseModel

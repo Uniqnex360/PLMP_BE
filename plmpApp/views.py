@@ -86,10 +86,11 @@ def createCategory(request):
         data['error'] = "Category Already Exists In Our Database"
         return data
     else:
-        category_obj = DatabaseModel.save_documents(category,{'name':name})
+        category_obj = DatabaseModel.save_documents(category,{'name':name,'client_id':ObjectId(client_id)})
     logForCategory(category_obj.id,"Created",user_login_id,'level-1',{})
     data['is_created'] = True
     return data
+
 @csrf_exempt
 def createCategory1(request):
     client_id = get_current_client()
@@ -97,20 +98,45 @@ def createCategory1(request):
     json_req = JSONParser().parse(request)
     name = json_req.get("name").title()
     category_id = json_req.get("category_id")
-    level_one_category_obj = DatabaseModel.get_document(level_one_category.objects,{'name':name,'client_id':ObjectId(client_id)})
+    
+    # Check if this level-1 category already exists with the given parent
+    level_one_category_obj = DatabaseModel.get_document(
+        level_one_category.objects,
+        {
+            'name': name,
+            'parent_id': ObjectId(category_id),
+            'client_id': ObjectId(client_id)
+        }
+    )
+    
     data = dict()
     if level_one_category_obj :
-        category_obj = DatabaseModel.get_document(category.objects,{'level_one_category_list__in':level_one_category_obj.id})
-        if category_obj:
-            data['is_created'] = False
-            data['error'] = "Category Already Exists In Our Database"
-            return data
+        # If it exists, return error (regardless of whether it's linked to parent category)
+        data['is_created'] = False
+        data['error'] = "Category Already Exists In Our Database"
+        return data
     else:
-        level_one_category_obj = DatabaseModel.save_documents(level_one_category,{'name':name})
-    DatabaseModel.update_documents(category.objects,{"id":category_id},{'add_to_set__level_one_category_list':level_one_category_obj.id})
-    logForCategory(level_one_category_obj.id,"Created",user_login_id,'level-2',{})
+        # Create the new category
+        level_one_category_obj = DatabaseModel.save_documents(
+            level_one_category,
+            {
+                'name': name,
+                'parent_id': ObjectId(category_id),
+                'client_id': ObjectId(client_id)
+            }
+        )
+    
+    # Link to parent category
+    DatabaseModel.update_documents(
+        category.objects,
+        {"id": ObjectId(category_id)},
+        {'add_to_set__level_one_category_list': level_one_category_obj.id}
+    )
+    
+    logForCategory(level_one_category_obj.id, "Created", user_login_id, 'level-2', {})
     data['is_created'] = True
     return data
+
 @csrf_exempt
 def createCategory2(request):
     client_id = get_current_client()
@@ -118,20 +144,45 @@ def createCategory2(request):
     json_req = JSONParser().parse(request)
     name = json_req.get("name").title()
     category_id = json_req.get("category_id")
-    level_two_category_obj = DatabaseModel.get_document(level_two_category.objects,{'name':name,'client_id':ObjectId(client_id)})
+    
+    # Check if this level-2 category already exists with the given parent
+    level_two_category_obj = DatabaseModel.get_document(
+        level_two_category.objects,
+        {
+            'name': name,
+            'parent_id': ObjectId(category_id),
+            'client_id': ObjectId(client_id)
+        }
+    )
+    
     data = dict()
     if level_two_category_obj :
-        category_obj = DatabaseModel.get_document(category.objects,{'level_two_category_list__in':level_two_category_obj.id})
-        if category_obj:
-            data['is_created'] = False
-            data['error'] = "Category Already Exists In Our Database"
-            return data
+        # If it exists, return error
+        data['is_created'] = False
+        data['error'] = "Category Already Exists In Our Database"
+        return data
     else:
-        level_two_category_obj = DatabaseModel.save_documents(level_two_category,{'name':name})
-    DatabaseModel.update_documents(level_one_category.objects,{"id":category_id},{'add_to_set__level_two_category_list':level_two_category_obj.id})
-    logForCategory(level_two_category_obj.id,"Created",user_login_id,'level-3',{})
+        # Create the new category
+        level_two_category_obj = DatabaseModel.save_documents(
+            level_two_category,
+            {
+                'name': name,
+                'parent_id': ObjectId(category_id),
+                'client_id': ObjectId(client_id)
+            }
+        )
+    
+    # Link to parent
+    DatabaseModel.update_documents(
+        level_one_category.objects,
+        {"id": ObjectId(category_id)},
+        {'add_to_set__level_two_category_list': level_two_category_obj.id}
+    )
+    
+    logForCategory(level_two_category_obj.id, "Created", user_login_id, 'level-3', {})
     data['is_created'] = True
     return data
+
 @csrf_exempt
 def createCategory3(request):
     client_id = get_current_client()
@@ -139,20 +190,45 @@ def createCategory3(request):
     json_req = JSONParser().parse(request)
     name = json_req.get("name").title()
     section_id = json_req.get("category_id")
-    level_three_category_obj = DatabaseModel.get_document(level_three_category.objects,{'name':name,'client_id':ObjectId(client_id)})
+    
+    # Check if this level-3 category already exists with the given parent
+    level_three_category_obj = DatabaseModel.get_document(
+        level_three_category.objects,
+        {
+            'name': name,
+            'parent_id': ObjectId(section_id),
+            'client_id': ObjectId(client_id)
+        }
+    )
+    
     data = dict()
     if level_three_category_obj :
-        category_obj = DatabaseModel.get_document(category.objects,{'level_three_category_list__in':level_three_category_obj.id})
-        if category_obj:
-            data['is_created'] = False
-            data['error'] = "Category Already Exists In Our Database"
-            return data
+        # If it exists, return error
+        data['is_created'] = False
+        data['error'] = "Category Already Exists In Our Database"
+        return data
     else:
-        level_three_category_obj = DatabaseModel.save_documents(level_three_category,{'name':name})
-    DatabaseModel.update_documents(level_two_category.objects,{"id":section_id},{'add_to_set__level_three_category_list':level_three_category_obj.id})
-    logForCategory(level_three_category_obj.id,"Created",user_login_id,'level-4',{})
+        # Create the new category
+        level_three_category_obj = DatabaseModel.save_documents(
+            level_three_category,
+            {
+                'name': name,
+                'parent_id': ObjectId(section_id),
+                'client_id': ObjectId(client_id)
+            }
+        )
+    
+    # Link to parent
+    DatabaseModel.update_documents(
+        level_two_category.objects,
+        {"id": ObjectId(section_id)},
+        {'add_to_set__level_three_category_list': level_three_category_obj.id}
+    )
+    
+    logForCategory(level_three_category_obj.id, "Created", user_login_id, 'level-4', {})
     data['is_created'] = True
     return data
+
 @csrf_exempt
 def createCategory4(request):
     client_id = get_current_client()
@@ -160,20 +236,45 @@ def createCategory4(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     name = json_req.get("name").title()
     section_id = json_req.get("category_id")
-    level_four_category_obj = DatabaseModel.get_document(level_four_category.objects,{'name':name,'client_id':ObjectId(client_id)})
+    
+    # Check if this level-4 category already exists with the given parent
+    level_four_category_obj = DatabaseModel.get_document(
+        level_four_category.objects,
+        {
+            'name': name,
+            'parent_id': ObjectId(section_id),
+            'client_id': ObjectId(client_id)
+        }
+    )
+    
     data = dict()
     if level_four_category_obj :
-        category_obj = DatabaseModel.get_document(category.objects,{'level_four_category_list__in':level_four_category_obj.id})
-        if category_obj:
-            data['is_created'] = False
-            data['error'] = "Category Already Exists In Our Database"
-            return data
+        # If it exists, return error
+        data['is_created'] = False
+        data['error'] = "Category Already Exists In Our Database"
+        return data
     else:
-        level_four_category_obj = DatabaseModel.save_documents(level_four_category,{'name':name})
-    DatabaseModel.update_documents(level_three_category.objects,{"id":section_id},{'add_to_set__level_four_category_list':level_four_category_obj.id})
-    logForCategory(level_four_category_obj.id,"Created",user_login_id,'level-5',{})
+        # Create the new category
+        level_four_category_obj = DatabaseModel.save_documents(
+            level_four_category,
+            {
+                'name': name,
+                'parent_id': ObjectId(section_id),
+                'client_id': ObjectId(client_id)
+            }
+        )
+    
+    # Link to parent
+    DatabaseModel.update_documents(
+        level_three_category.objects,
+        {"id": ObjectId(section_id)},
+        {'add_to_set__level_four_category_list': level_four_category_obj.id}
+    )
+    
+    logForCategory(level_four_category_obj.id, "Created", user_login_id, 'level-5', {})
     data['is_created'] = True
     return data
+
 @csrf_exempt
 def createCategory5(request):
     client_id = get_current_client()
@@ -181,19 +282,42 @@ def createCategory5(request):
     json_req = JSONParser().parse(request)
     name = json_req.get("name").title()
     section_id = json_req.get("category_id")
-    level_five_category_obj = DatabaseModel.get_document(level_five_category.objects,{'name':name,'client_id':ObjectId(client_id)})
+    
+    # Check if this level-5 category already exists with the given parent
+    level_five_category_obj = DatabaseModel.get_document(
+        level_five_category.objects,
+        {
+            'name': name,
+            'parent_id': ObjectId(section_id),
+            'client_id': ObjectId(client_id)
+        }
+    )
+    
     data = dict()
     if level_five_category_obj :
-        category_obj = DatabaseModel.get_document(category.objects,{'level_five_category_list__in':level_five_category_obj.id})
-        if category_obj:
-            data['is_created'] = False
-            data['error'] = "Category Already Exists In Our Database"
-            return data
+        # If it exists, return error
+        data['is_created'] = False
+        data['error'] = "Category Already Exists In Our Database"
+        return data
     else:
-        level_five_category_obj = DatabaseModel.save_documents(level_five_category,{'name':name})
-    DatabaseModel.update_documents(level_four_category.objects,{"id":section_id},{'add_to_set__level_five_category_list':level_five_category_obj.id})
-    logForCategory(level_five_category_obj.id,"Created",user_login_id,'level-6',{})
-    data = dict()
+        # Create the new category
+        level_five_category_obj = DatabaseModel.save_documents(
+            level_five_category,
+            {
+                'name': name,
+                'parent_id': ObjectId(section_id),
+                'client_id': ObjectId(client_id)
+            }
+        )
+    
+    # Link to parent
+    DatabaseModel.update_documents(
+        level_four_category.objects,
+        {"id": ObjectId(section_id)},
+        {'add_to_set__level_five_category_list': level_five_category_obj.id}
+    )
+    
+    logForCategory(level_five_category_obj.id, "Created", user_login_id, 'level-6', {})
     data['is_created'] = True
     return data
 @csrf_exempt
@@ -505,6 +629,7 @@ def obtainCategoryAndSections(request):
     data['category_list'] = result
     data['category_count'] = len(result)
     return data
+
 @csrf_exempt
 def obtainAllProductList(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
@@ -2284,6 +2409,7 @@ import chardet
 from io import StringIO
 logger = logging.getLogger(__name__)
 @csrf_exempt
+
 def saveXlData(request):
     logger.info("saveXlData function called")
     data = dict()
@@ -2356,15 +2482,15 @@ def saveXlData(request):
     }
     for c in category.objects.filter(client_id=client_id).only('id','name'):
         categories_cache['level_0'][c.name.lower()]=c.id  
-    for c in level_one_category.objects.filter(client_id=client_id).only('id','name'):
+    for c in level_one_category.objects.filter(client_id=client_id).only('id','name','parent_id'):
         categories_cache['level_1'][c.name.lower()]=c.id  
-    for c in level_two_category.objects.filter(client_id=client_id).only('id','name'):
+    for c in level_two_category.objects.filter(client_id=client_id).only('id','name','parent_id'):
         categories_cache['level_2'][c.name.lower()]=c.id  
-    for c in level_three_category.objects.filter(client_id=client_id).only('id','name'):
+    for c in level_three_category.objects.filter(client_id=client_id).only('id','name','parent_id'):
         categories_cache['level_3'][c.name.lower()]=c.id  
-    for c in level_four_category.objects.filter(client_id=client_id).only('id','name'):
+    for c in level_four_category.objects.filter(client_id=client_id).only('id','name','parent_id'):
         categories_cache['level_4'][c.name.lower()]=c.id  
-    for c in level_five_category.objects.filter(client_id=client_id).only('id','name'):
+    for c in level_five_category.objects.filter(client_id=client_id).only('id','name','parent_id'):
         categories_cache['level_5'][c.name.lower()]=c.id  
     products_cache={}
     for p in products.objects.filter(client_id=client_id).only('id','model','brand_id','options'):
@@ -2587,6 +2713,10 @@ def saveXlData(request):
                     i = i.title()
                     cat_key=i.lower()
                     if index == 0:
+                        cat_key = i.lower()
+                    else:
+                        cat_key = f"{previous_category_id}_{i.lower()}"
+                    if index==0:
                         if cat_key in categories_cache['level_0']:
                             category_id=categories_cache['level_0'][cat_key]
                         else:    
@@ -2600,50 +2730,75 @@ def saveXlData(request):
                         if cat_key in categories_cache['level_1']:
                             level_one_id=categories_cache['level_1'][cat_key]
                         else:
-                            level_one_obj = DatabaseModel.save_documents(level_one_category,{'name':i})
-                            level_one_id=level_one_obj.id
-                            categories_cache['level_1'][cat_key]=level_one_id
-                            bulk_logs.append({'cat_id': level_one_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                            existing_category = DatabaseModel.get_document(level_one_category.objects,{'name': i,'parent_id': previous_category_id,'client_id': client_id})
+                            if existing_category:
+                                level_one_id = existing_category.id
+                                categories_cache['level_1'][cat_key] = level_one_id
+                            else:
+                                level_one_obj = DatabaseModel.save_documents(level_one_category,{'name':i, 'parent_id': previous_category_id, 'client_id': client_id})
+                                level_one_id=level_one_obj.id
+                                categories_cache['level_1'][cat_key]=level_one_id
+                                bulk_logs.append({'cat_id': level_one_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
                         DatabaseModel.update_documents(category.objects,{"id":previous_category_id},{"add_to_set__level_one_category_list":level_one_id})
                         previous_category_id = level_one_id
                     elif index == 2:
                         if cat_key in categories_cache['level_2']:
                             level_two_id = categories_cache['level_2'][cat_key]
                         else:
-                            level_two_obj = DatabaseModel.save_documents(level_two_category, {'name': i})
-                            level_two_id = level_two_obj.id
-                            categories_cache['level_2'][cat_key] = level_two_id
-                            bulk_logs.append({'cat_id': level_two_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                            existing_category = DatabaseModel.get_document(level_two_category.objects,{'name': i,'parent_id': previous_category_id,'client_id': client_id})
+                            if existing_category:
+                                level_two_id = existing_category.id
+                                categories_cache['level_2'][cat_key] = level_two_id
+                            else:
+                                level_two_obj = DatabaseModel.save_documents(level_two_category, {'name': i, 'parent_id': previous_category_id, 'client_id': client_id})
+                                level_two_id = level_two_obj.id
+                                categories_cache['level_2'][cat_key] = level_two_id
+                                bulk_logs.append({'cat_id': level_two_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
                         DatabaseModel.update_documents(level_one_category.objects, {"id": previous_category_id}, {"add_to_set__level_two_category_list": level_two_id})
                         previous_category_id = level_two_id
                     elif index == 3:
                         if cat_key in categories_cache['level_3']:
                             level_three_id = categories_cache['level_3'][cat_key]
                         else:
-                            level_three_obj = DatabaseModel.save_documents(level_three_category, {'name': i})
-                            level_three_id = level_three_obj.id
-                            categories_cache['level_3'][cat_key] = level_three_id
-                            bulk_logs.append({'cat_id': level_three_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                            existing_category = DatabaseModel.get_document(level_three_category.objects,{'name': i,'parent_id': previous_category_id,'client_id': client_id})
+                            if existing_category:
+                                level_three_id = existing_category.id
+                                categories_cache['level_3'][cat_key] = level_three_id
+                            else:
+                                level_three_obj = DatabaseModel.save_documents(level_three_category, {'name': i, 'parent_id': previous_category_id, 'client_id': client_id})
+                                level_three_id = level_three_obj.id
+                                categories_cache['level_3'][cat_key] = level_three_id
+                                bulk_logs.append({'cat_id': level_three_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
                         DatabaseModel.update_documents(level_two_category.objects, {"id": previous_category_id}, {"add_to_set__level_three_category_list": level_three_id})
                         previous_category_id = level_three_id
                     elif index == 4:
                         if cat_key in categories_cache['level_4']:
                             level_four_id = categories_cache['level_4'][cat_key]
                         else:
-                            level_four_obj = DatabaseModel.save_documents(level_four_category, {'name': i})
-                            level_four_id = level_four_obj.id
-                            categories_cache['level_4'][cat_key] = level_four_id
-                            bulk_logs.append({'cat_id': level_four_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                            existing_category = DatabaseModel.get_document(level_four_category.objects,{'name': i,'parent_id': previous_category_id,'client_id': client_id})
+                            if existing_category:
+                                level_four_id = existing_category.id
+                                categories_cache['level_4'][cat_key] = level_four_id
+                            else:
+                                level_four_obj = DatabaseModel.save_documents(level_four_category, {'name': i, 'parent_id': previous_category_id, 'client_id': client_id})
+                                level_four_id = level_four_obj.id
+                                categories_cache['level_4'][cat_key] = level_four_id
+                                bulk_logs.append({'cat_id': level_four_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
                         DatabaseModel.update_documents(level_three_category.objects, {"id": previous_category_id}, {"add_to_set__level_four_category_list": level_four_id})
                         previous_category_id = level_four_id
                     elif index == 5:
                         if cat_key in categories_cache['level_5']:
                             level_five_id = categories_cache['level_5'][cat_key]
                         else:
-                            level_five_obj = DatabaseModel.save_documents(level_five_category, {'name': i})
-                            level_five_id = level_five_obj.id
-                            categories_cache['level_5'][cat_key] = level_five_id
-                            bulk_logs.append({'cat_id': level_five_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
+                            existing_category = DatabaseModel.get_document(level_five_category.objects,{'name': i,'parent_id': previous_category_id,'client_id': client_id})
+                            if existing_category:
+                                level_five_id = existing_category.id
+                                categories_cache['level_5'][cat_key] = level_five_id
+                            else:
+                                level_five_obj = DatabaseModel.save_documents(level_five_category, {'name': i, 'parent_id': previous_category_id, 'client_id': client_id})
+                                level_five_id = level_five_obj.id
+                                categories_cache['level_5'][cat_key] = level_five_id
+                                bulk_logs.append({'cat_id': level_five_id, 'action': 'Created', 'user': user_login_id, 'level': 'level-1'})
                         DatabaseModel.update_documents(level_four_category.objects, {"id": previous_category_id}, {"add_to_set__level_five_category_list": level_five_id})
                         previous_category_id = level_five_id
                 brand_key = brand_name.title().lower()
@@ -2793,7 +2948,7 @@ def saveXlData(request):
                             obtainlogForCategoryVarientOption(category_id,varient_option_obj.id,"Updated",ObjectId(user_login_id),category_level,{})
                             DatabaseModel.update_documents(category_varient.objects,{"id":category_varient_obj.id},{'category_id':category_id,'add_to_set__varient_option_id_list':varient_option_obj.id})
         except Exception as e:
-            logger.error(f"Error processing row {i + 2}: {str(e)}", exc_info=True)
+            logger.error(f"Error processing row {str(i + 2)}: {str(e)}", exc_info=True)
             dict_error['error-row'] = i + 2
             dict_error['error_list'].append(f"Error processing row: {str(e)}")
             dict_error['is_error'] = True
