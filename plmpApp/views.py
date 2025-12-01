@@ -1,8 +1,9 @@
 from __future__ import annotations
-from django.http import JsonResponse # type: ignore
+from django.http import JsonResponse 
 from .models import products
 from .models import varient_option
 from .models import category
+from django.core.cache import cache
 from .models import level_one_category
 from .models import level_two_category
 from .models import level_three_category
@@ -27,31 +28,30 @@ from .models import client
 from .models import brand_category_price
 from .models import radial_price_log
 from .models import revert_varient_retail_price
-
 from plmp_backend.env import MONGODB_COURSE_DB_NAME
-from django.http import HttpResponse # type: ignore
-from openpyxl import Workbook # type: ignore
-import pandas as pd # type: ignore # type: ignoreC
+from django.http import HttpResponse 
+from openpyxl import Workbook 
+import pandas as pd 
 from io import BytesIO
-from rest_framework.parsers import JSONParser # type: ignore
+from rest_framework.parsers import JSONParser 
 import json
 from .global_service import DatabaseModel
-from bson import ObjectId # type: ignore
-from django.http import HttpResponse # type: ignore
-from openpyxl import Workbook # type: ignore
+from bson import ObjectId 
+from django.http import HttpResponse 
+from openpyxl import Workbook 
 from io import BytesIO
-import pandas as pd # type: ignore
-import pdfplumber # type: ignore
+import pandas as pd 
+import pdfplumber 
 import math
 import shutil
-from django.core.files.storage import FileSystemStorage # type: ignore
+from django.core.files.storage import FileSystemStorage 
 import os
 import re
 from .view_utils import getCategoryLevelOrder
-from django.views.decorators.csrf import csrf_exempt # type: ignore
-from django.core.management.utils import get_random_secret_key # type: ignore
-from pytz import timezone # type: ignore
-from django.utils.timezone import is_naive, make_aware # type: ignore
+from django.views.decorators.csrf import csrf_exempt 
+from django.core.management.utils import get_random_secret_key 
+from pytz import timezone 
+from django.utils.timezone import is_naive, make_aware 
 from .custom_middleware import get_current_user,get_current_client
 from mongoengine.connection import get_db
 from django.core.cache import cache
@@ -60,22 +60,19 @@ import hashlib
 import json
 def v1(request):
     u_o = DatabaseModel.get_document(user.objects).name
-    db = get_db()  # Fetch the active MongoDB connection
-    db_name = db.name  # Get the database name
+    db = get_db()  
+    db_name = db.name  
     print(db_name)
     return JsonResponse({"PLMP_API":u_o},safe=False)
 def create_user(request):
     json_request = json.loads(request.body)
     categories_data = json_request.get('categories')
-
     for category_data in categories_data:
         name = category_data.get('name')
         if name:
             category_obj = category(name=name,section_list = [])
             category_obj.save()
     return JsonResponse({'status': 'User created'})
-
-
 @csrf_exempt
 def createCategory(request):
     client_id = get_current_client()
@@ -93,8 +90,6 @@ def createCategory(request):
     logForCategory(category_obj.id,"Created",user_login_id,'level-1',{})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory1(request):
     client_id = get_current_client()
@@ -116,8 +111,6 @@ def createCategory1(request):
     logForCategory(level_one_category_obj.id,"Created",user_login_id,'level-2',{})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory2(request):
     client_id = get_current_client()
@@ -139,12 +132,9 @@ def createCategory2(request):
     logForCategory(level_two_category_obj.id,"Created",user_login_id,'level-3',{})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory3(request):
     client_id = get_current_client()
-    
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     json_req = JSONParser().parse(request)
     name = json_req.get("name").title()
@@ -163,12 +153,9 @@ def createCategory3(request):
     logForCategory(level_three_category_obj.id,"Created",user_login_id,'level-4',{})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory4(request):
     client_id = get_current_client()
-    
     json_req = JSONParser().parse(request)
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     name = json_req.get("name").title()
@@ -187,12 +174,9 @@ def createCategory4(request):
     logForCategory(level_four_category_obj.id,"Created",user_login_id,'level-5',{})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory5(request):
     client_id = get_current_client()
-    
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     json_req = JSONParser().parse(request)
     name = json_req.get("name").title()
@@ -212,8 +196,6 @@ def createCategory5(request):
     data = dict()
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createProduct(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
@@ -228,38 +210,6 @@ def createProduct(request):
         data['status'] = False
         data['error'] = "Product Already Created"
         return data
-    # height = ""
-    # width = ""
-    # depth = ""
-    # length = ""
-    # if product_obj['height']:
-    #     if product_obj['units'] == "in":
-    #         height = str(product_obj['height']) +'"'+'H'
-    #     elif product_obj['units'] == "ft":
-    #         height = str(product_obj['height']) +"'"+'H'
-    #     elif product_obj['units'] == "mm":
-    #         height = str(product_obj['height']) +"mm"+'H'
-    # if product_obj['width']:
-    #     if product_obj['units'] == "in":
-    #         width = str( product_obj['width']) +'"'+'W'
-    #     elif product_obj['units'] == "ft":
-    #         width = str( product_obj['width']) +"'"+'W'
-    #     elif product_obj['units'] == "mm":
-    #         width = str( product_obj['width']) +"mm"+'W'
-    # if product_obj['depth']:
-    #     if product_obj['units'] == "in":
-    #         depth = product_obj['depth'] +'"'+'D'
-    #     elif product_obj['units'] == "ft":
-    #         depth = product_obj['depth'] +"'"+'D'
-    #     elif product_obj['units'] == "mm":
-    #         depth = str( product_obj['depth']) +"mm"+'D'
-    # if product_obj['length']:
-    #     if product_obj['units'] == "in":
-    #         length = product_obj['length'] +'"'+'L'
-    #     elif product_obj['units'] == "ft":
-    #         length = product_obj['length'] +"'"+'L'
-    #     elif product_obj['units'] == "mm":
-    #         length = str( product_obj['length']) +"mm"+'L'
     product_obj_save = {
         "model" :product_obj['model'],
         "upc_ean" :product_obj['upc_ean'],
@@ -276,13 +226,10 @@ def createProduct(request):
         "option_str":product_obj['option_str'],
         'units':product_obj['units'],
         'image':product_obj['image'],
-        # "msrp":str(product_obj['msrp']),
-        # "base_price":str(product_obj['base_price']),
         "key_features":product_obj['key_features'],
         "dimensions":str(product_obj['dimensions'])
     }
     products_obj_1 = DatabaseModel.save_documents(products,product_obj_save)
-    # products_obj_1.dimensions = (dimensions(height=height, width=width,depth =depth,length = length ))
     products_obj_1.save()
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     brand_category_price_obj = DatabaseModel.get_document(brand_category_price.objects,{'category_id':ObjectId(category_id),'brand_id':ObjectId(products_obj_1.brand_id.id),'is_active':True})
@@ -292,8 +239,6 @@ def createProduct(request):
     product_varient_list_check = []
     for z in product_obj['varients']:
         retail_price = str(z['retail_price']) 
-        # dimensions = str(z['dimensions']) 
-        
         if z['sku_number'] in product_varient_list_check:
             data = dict()
             data['status'] = False
@@ -312,9 +257,6 @@ def createProduct(request):
     data = dict()
     data['status'] = True
     return data
-
-
-#delete
 @csrf_exempt
 def deleteCategory(request):
     json_req = JSONParser().parse(request)
@@ -331,7 +273,6 @@ def deleteCategory(request):
                 data['error'] = "product  is added so category cannot be deleted"
             else:
                 DatabaseModel.delete_documents(category.objects,{'id':id})
-
     elif category_name == "level-2":
         category_id = json_req.get("category_id")
         category_obj = DatabaseModel.get_document(level_one_category.objects,{'id':id})
@@ -391,9 +332,6 @@ def deleteCategory(request):
     data = dict()
     data['is_deleted'] = True
     return data
-
-
-#update
 @csrf_exempt
 def updateCategory(request):
     json_req = JSONParser().parse(request)
@@ -415,8 +353,6 @@ def updateCategory(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 def convert_object_ids_to_strings(data):
     if isinstance(data, list):
         for item in data:
@@ -427,8 +363,6 @@ def convert_object_ids_to_strings(data):
                 data[key] = str(value)
             else:
                 convert_object_ids_to_strings(value)
-
-
 def obtainCategoryAndSections(request):
     client_id = get_current_client()
     pipeline = [
@@ -571,8 +505,6 @@ def obtainCategoryAndSections(request):
     data['category_list'] = result
     data['category_count'] = len(result)
     return data
-
-
 @csrf_exempt
 @cache_page(3600)
 def obtainAllProductList(request):
@@ -592,12 +524,6 @@ def obtainAllProductList(request):
         f"{varient_option_value}|{brand_id}|{filter_param}|"
         f"{search_term}|{pg}|{level_name}"
     )
-    # hashed_key = hashlib.md5(raw_key_string.encode('utf-8')).hexdigest()
-    # cache_key = f"prod_list_{hashed_key}"
-    # cached_result = cache.get(cache_key)
-    # if cached_result:
-    #     print(f"Cache HIT: {cache_key}")
-    #     return cached_result
     if pg:
         try:
             pg = int(pg)
@@ -634,7 +560,6 @@ def obtainAllProductList(request):
     category_obj = {}
     if category_id != None and level_name == None:
         category_obj = {"category_id":category_id}
-    
     elif category_id:
         all_ids = []
         if level_name == "level-1":
@@ -713,12 +638,8 @@ def obtainAllProductList(request):
     {
             '$unwind': {
                 'path': '$products',
-                # 'preserveNullAndEmptyArrays': True
             }
         },
-    # {
-    #     "$match":{'products.client_id':ObjectId(client_id)}
-    # }
     ]
     if product_varient_option_obj:
         pipeline.extend([
@@ -772,8 +693,6 @@ def obtainAllProductList(request):
     {
         '$group': {
             "_id":'$_id',
-            # 'product_list': {
-            #     "$push": {
             'product_name':{'$first': "$products.product_name"},
             'product_id':{'$first': "$products._id"},
             'model':{'$first':"$products.model"},
@@ -807,24 +726,18 @@ def obtainAllProductList(request):
 ]
     }
   },{'$sort': {'_id':reverse_check}}
-        # }
-    # }
     ])
     result = list(product_category_config.objects.aggregate(*pipeline))
     data = dict()
     data['product_count'] = len(result)
     data['product_id_list'] = [str(i['product_id'])for i in result]
     result_ = result[from_pg:to_pg]
-    # result = result[:25]
     for j in result_:
         del (j['_id'])
         j['product_id'] = str(j['product_id']) if 'product_id'in j else ""
         getCategoryLevelOrder(j)
     data['product_list'] = result_
-    # data['product_list'] = sorted(data['product_list'], key=lambda x: ObjectId(x['product_id']),reverse=reverse_check)
     return data
-
-
 @csrf_exempt
 def obtainProductDetails(request):
     json_req = JSONParser().parse(request)
@@ -897,7 +810,6 @@ def obtainProductDetails(request):
                 }
             },{ "$limit": 1 }
         ]
-
         product_category_config_obj = list(product_category_config.objects.aggregate(pipeline))
         if product_category_config_obj:
             result['category_id'] = str(product_category_config_obj[0]['category_id'])
@@ -922,21 +834,16 @@ def obtainProductDetails(request):
             },
             { "$limit": 1 }
         ]
-
         brand_category_price_obj = list(brand_category_price.objects.aggregate(pipeline))
-
         if brand_category_price_obj:
             result['category_brand_price']['price'] = brand_category_price_obj[0]['price']
             result['category_brand_price']['price_option'] = brand_category_price_obj[0]['price_option']
-
         else:
             result['category_brand_price']['price'] = 1
             result['category_brand_price']['price_option'] = "finished_price"
         getCategoryLevelOrder(i)
         result['category_level'] = i['category_name']
     return  result
-
-
 def productBulkUpdate(request):
     json_req = JSONParser().parse(request)
     product_obj_list = json_req['product_obj_list']
@@ -945,85 +852,22 @@ def productBulkUpdate(request):
     data = dict()
     data['is_updated'] = True  
     return data
-
-
 @csrf_exempt
 def productUpdate(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     json_req = JSONParser().parse(request)
     product_id = json_req['id']
     json_req['update_obj']['brand_id'] = ObjectId(json_req['update_obj']['brand_id'])
-    # height = json_req['update_obj']['height']
-    # del json_req['update_obj']['height']
-    # width = json_req['update_obj']['width']
-    # del json_req['update_obj']['width']
-    # depth = json_req['update_obj']['depth']
-    # del json_req['update_obj']['depth']
-    # length = json_req['update_obj']['length']
-    # del json_req['update_obj']['length']
-    # length = length.replace("'", '"')
-    # if height:
-    #     height = re.findall(r'\d+', height)
-    #     if height:
-    #         height = height[0]
-    #     else:
-    #         height = ""
-    #     if json_req['update_obj']['units'] == "in":
-    #         height = str(height) +'"'+'H'
-    #     elif json_req['update_obj']['units'] == "ft":
-    #         height = str(height) +"'"+'H'
-    #     elif json_req['update_obj']['units'] == "mm":
-    #         height = str(height) +"mm"+'H'
-    # if width:
-    #     width = re.findall(r'\d+', width)
-    #     if width:
-    #         width = width[0]
-    #     else:
-    #         width = ""
-    #     if json_req['update_obj']['units'] == "in":
-    #         width = str( width) +'"'+'W'
-    #     elif json_req['update_obj']['units'] == "ft":
-    #         width = str( width) +"'"+'W'
-    #     elif json_req['update_obj']['units'] == "mm":
-    #         width = str( width) +"mm"+'W'
-    # if depth:
-    #     depth = re.findall(r'\d+', depth)
-    #     if depth:
-    #         depth = depth[0]
-    #     else:
-    #         depth = ""
-    #     if json_req['update_obj']['units'] == "in":
-    #         depth = depth +'"'+'D'
-    #     elif json_req['update_obj']['units'] == "ft":
-    #         depth = depth +"'"+'D'
-    #     elif json_req['update_obj']['units'] == "mm":
-    #         depth = str( depth) +"mm"+'D'
-    # if length:
-    #     length = re.findall(r'\d+', length)
-    #     if length:
-    #         length = length[0]
-    #     else:
-    #         length = ""
-    #     if json_req['update_obj']['units'] == "in":
-    #         length = length +'"'+'L'
-    #     elif json_req['update_obj']['units'] == "ft":
-    #         length = length +"'"+'L'
-    #     elif json_req['update_obj']['units'] == "mm":
-    #         length = str( length) +"mm"+'L'
-
     update_dict = json_req['update_obj'].copy()
     if 'brand_id' in json_req['update_obj'] and json_req['update_obj']['brand_id']:
         json_req['update_obj']['brand_id'] = ObjectId(json_req['update_obj']['brand_id'])
     DatabaseModel.update_documents(products.objects, {'id': product_id}, json_req['update_obj'])
     products_obj = DatabaseModel.get_document(products.objects,{'id':product_id})
-    # products_obj.dimensions = (dimensions(height=height, width=width,depth =depth,length =length))
     products_obj.save()
     logForCreateProduct(product_id,user_login_id,"Updated",update_dict)
     data = dict()
     data['is_updated'] = True
     return data
-
-
 @csrf_exempt
 def varientUpdate(request):
     json_req = JSONParser().parse(request)
@@ -1046,7 +890,6 @@ def varientUpdate(request):
     data = dict()
     data['is_updated'] = True
     return data
-
 from collections import defaultdict
 @csrf_exempt
 def obtainAllVarientList(request):
@@ -1054,16 +897,11 @@ def obtainAllVarientList(request):
     product_id = ObjectId(json_req['product_id'])
     varient_option_name = json_req.get("variant_option_name_id", [])
     varient_option_value = json_req.get("variant_option_value_id", [])
-
-    # Group filter values by option name (group-wise OR)
     grouped_filters = defaultdict(set)
     if varient_option_name and varient_option_value:
         for name_id, value_id in zip(varient_option_name, varient_option_value):
             grouped_filters[ObjectId(name_id)].add(ObjectId(value_id))
-
-    # Step 1: For each option group, find matching variant IDs (OR in group)
     variant_id_sets = []
-
     for option_name_id, value_ids in grouped_filters.items():
         pipeline = [
             {"$match": {"_id": product_id}},
@@ -1097,18 +935,13 @@ def obtainAllVarientList(request):
                 }
             }
         ]
-
         results = list(products.objects.aggregate(*pipeline))
         variant_ids = set([r['_id'] for r in results])
         variant_id_sets.append(variant_ids)
-
-    # Step 2: Intersect variant IDs across all option groups (AND across groups)
     if variant_id_sets:
         matching_variant_ids = set.intersection(*variant_id_sets)
     else:
-        matching_variant_ids = None  # No filters applied
-
-    # Step 3: Fetch final variant data using matching_variant_ids (if any)
+        matching_variant_ids = None  
     pipeline = [
         {"$match": {"_id": product_id}},
         {
@@ -1121,10 +954,8 @@ def obtainAllVarientList(request):
         },
         {"$unwind": "$product_varient_ins"},
     ]
-
     if matching_variant_ids is not None:
         pipeline.append({"$match": {"product_varient_ins._id": {"$in": list(matching_variant_ids)}}})
-
     pipeline += [
         {
             "$lookup": {
@@ -1190,10 +1021,7 @@ def obtainAllVarientList(request):
         },
         {"$sort": {"id": 1}}
     ]
-
     result = list(products.objects.aggregate(*pipeline))
-
-    # Convert ObjectIds to strings for frontend
     for item in result:
         item['id'] = str(item['id'])
         for option in item.get('varient_option_list', []):
@@ -1201,11 +1029,7 @@ def obtainAllVarientList(request):
                 option['type_id'] = str(option['type_id'])
             if 'type_value_id' in option:
                 option['type_value_id'] = str(option['type_value_id'])
-
     return result
-
-
-
 @csrf_exempt
 def exportAll(request):
     category_id = request.GET.get('category_id')
@@ -1222,18 +1046,14 @@ def exportAll(request):
     if is_active_product == 'true':
         is_active_product = {'is_active': True}
     else:
-
         is_active_product = {}
     if is_active_variant == 'true':
-
         is_active_variant = {'product_varient_ins.is_active': True}
     else:
-
         is_active_variant = {}
     if category_id:
         category_obj = {'product_category_config_ins.category_id':category_id,"client_id":ObjectId(client_id)}
     else:
-
         category_obj = {"client_id":ObjectId(client_id)}
     pipeline = [
         {
@@ -1271,14 +1091,6 @@ def exportAll(request):
                 'as': 'product_varient_option_ins'
             }
         },  
-        # {'$unwind': {'path': '$product_varient_option_ins', 'preserveNullAndEmptyArrays': True}},{
-        # '$lookup': {
-        #     'from': 'product_varient_option',
-        #     'localField': 'product_varient_ins.varient_option_id',
-        #     'foreignField': '_id',
-        #     'as': 'product_varient_option_ins'
-        # }
-        # },
         {
             '$unwind': {
                 'path': '$product_varient_option_ins',
@@ -1383,7 +1195,6 @@ def exportAll(request):
         },{
             '$sort':{'id':1}
         }
-    
     ]
     print("\nRUNNING AGGREGATION PIPELINE...")
     result = list(products.objects.aggregate(*pipeline))
@@ -1395,7 +1206,6 @@ def exportAll(request):
         print(result[0] if result else "None")
     max_variants = 0
     max_image = 0
-    
     for i in result:
         if max_variants < len(i['varient_option_list']):
             max_variants = len(i['varient_option_list'])
@@ -1407,10 +1217,6 @@ def exportAll(request):
     worksheet.title = "Products"
     print(f"\nMAX VARIANTS FOUND: {max_variants}")
     print(f"MAX IMAGES PER VARIANT: {max_image}")
-    # headers = [   
-    # "S.No","mpn", "Variant SKU","Product Name","Model", "UPC/EAN","taxonomy","Brand", "Short Description","Long Description",
-    # "Retail Price", "Unfinished Price", "Finished Price"
-    # ]
     headers = ["Handle","Title","Body (HTML)","Vendor","Product Category","Type","Tags","Published",]
     variant_headers = []
     for i in range(1, max_variants + 1):
@@ -1419,13 +1225,12 @@ def exportAll(request):
         variant_headers.append(f"Option{i} Linked To")
     headers.extend(variant_headers)
     headers.extend(["Variant SKU","Variant Grams","Variant Inventory Tracker","Variant Inventory Qty","Variant Inventory Policy","Variant Fulfillment Service","Variant Price","Variant Compare At Price","Variant Requires Shipping","Variant Taxable","Variant Barcode","Image Src","Image Position","Image Alt Text","Gift Card","SEO Title","SEO Description","Google Shopping / Google Product Category","Google Shopping / Gender","Google Shopping / Age Group","Google Shopping / MPN","Google Shopping / Condition","Google Shopping / Custom Product","Google Shopping / Custom Label 0","Google Shopping / Custom Label 1","Google Shopping / Custom Label 2","Google Shopping / Custom Label 3","Google Shopping / Custom Label 4","Complimentary Product Text (product.metafields.custom.complimentary_product_text)","Custom Additions (product.metafields.custom.custom_additions)","Details as Shown (product.metafields.custom.details_as_shown1)","Dimensions (product.metafields.custom.dimensions1)","Key Features (product.metafields.custom.key_features1)","Options (product.metafields.custom.options1)","Quickship or Regular (product.metafields.custom.quickship_or_regular)","Quickship or Regular Product (product.metafields.custom.quickship_or_regular_product)","Google: Custom Product (product.metafields.mm-google-shopping.custom_product)","Bed/Frame features (product.metafields.shopify.bed-frame-features)","Color (product.metafields.shopify.color-pattern)","Frame color (product.metafields.shopify.frame-color)","Furniture/Fixture features (product.metafields.shopify.furniture-fixture-features)","Furniture/Fixture material (product.metafields.shopify.furniture-fixture-material)","Seat structure (product.metafields.shopify.seat-structure)","Tabletop shape (product.metafields.shopify.tabletop-shape)","Upholstery material (product.metafields.shopify.upholstery-material)","Complementary products (product.metafields.shopify--discovery--product_recommendation.complementary_products)","Related products (product.metafields.shopify--discovery--product_recommendation.related_products)","Related products settings (product.metafields.shopify--discovery--product_recommendation.related_products_display","Variant Image","Variant Weight Unit","Variant Tax Code","Cost per item","Included / United States","Price / United States","Compare At Price / United States","Status"])
-
     worksheet.append(headers)
     def generate_shopify_handle(product_name):
         name = product_name.lower()
-        name = re.sub(r'[^a-z0-9\s-]', '', name)  # remove special characters
-        name = re.sub(r'\s+', '-', name)          # replace spaces with hyphens
-        name = re.sub(r'-+', '-', name)           # replace multiple hyphens with one
+        name = re.sub(r'[^a-z0-9\s-]', '', name)  
+        name = re.sub(r'\s+', '-', name)          
+        name = re.sub(r'-+', '-', name)           
         return name.strip('-')   
     title_list_dublicate = dict()
     for i, item in enumerate(result):
@@ -1452,14 +1257,13 @@ def exportAll(request):
                     title_releated_details[f'option{j+1} Name'] = ""
             title_list_dublicate[item.get("product_name", "")]['count'] +=1
         else:
-            
             title_releated_details = {'title':item.get("product_name", ""),'body':item.get("long_description", ""),'vendor':item.get("brand", ""),'cat':i_dict.get("category_name", ""),'category_last_name':i_dict.get("category_last_name",""), "tags":item.get("Tags", ""),'published':"TRUE",'count':0,'status':status,'dimensions':dimensions,'key_features':item.get("Key Features", ""),'option_str':item.get("option_str", ""),'Gift_Card':'FALSE'}
             title_list_dublicate[item.get("product_name", "")] = title_releated_details
             for j in range(max_variants):
                 if j < len(variant_options):
                     title_releated_details[f'option{j+1} Name'] = variant_options[j].get('name', '')
         row = [
-            generate_shopify_handle(item.get("product_name", "")), #handle
+            generate_shopify_handle(item.get("product_name", "")), 
             title_releated_details.get('title'),
             title_releated_details.get('body'),
             title_releated_details.get('vendor'),
@@ -1468,7 +1272,6 @@ def exportAll(request):
             title_releated_details.get('tags'),
             title_releated_details.get('published'),
         ]
-        
         for j in range(max_variants):
             if j < len(variant_options):
                 row.append(title_releated_details[f'option{j+1} Name'])
@@ -1478,9 +1281,9 @@ def exportAll(request):
                 row.append(val)
                 row.append(variant_options[j].get(''))
             else:
-                row.append('')  # Add empty values for missing variants
-                row.append('')  # Add empty values for missing variants
-                row.append('')  # Add empty values for missing variants
+                row.append('')  
+                row.append('')  
+                row.append('')  
         retail_price = item.get("retail_price",0.0)
         if retail_price != 'None' and retail_price != None and retail_price != "":
             retail_price = str(round(float(retail_price),2))
@@ -1490,12 +1293,7 @@ def exportAll(request):
         if img_src == "" or img_src ==None:
             img_src = []
             image_pos = ""
-
         else:
-        # img_src_str = ""
-        # for j in img_src:
-        #     if j != "":
-        #         img_src_str = str(j) +"," + str(img_src_str)
             try:
                 row.append(img_src[title_releated_details['count']])  
                 image_pos = title_releated_details['count']+1
@@ -1507,7 +1305,6 @@ def exportAll(request):
         if f_p != 'None' and f_p != None and f_p != "":
             f_p = str(round(float(f_p),2))
         row.append(f_p)
-        
         row.extend(["","","",title_releated_details['status']])
         worksheet.append(row)
     buffer = BytesIO()
@@ -1520,10 +1317,8 @@ def exportAll(request):
     response['Expires'] = '0'
     print("CONTENT LENGTH:", len(response.content))
     print("FIRST 500 BYTES:", response.content[:500])
-    print("HAS EXCEL MAGIC BYTES?", response.content.startswith(b'PK'))  #
+    print("HAS EXCEL MAGIC BYTES?", response.content.startswith(b'PK'))  
     return response
-
-
 @csrf_exempt
 def retrieveData(request):
     data = dict()
@@ -1538,7 +1333,6 @@ def retrieveData(request):
             for sheet_name, df in sheets_dict.items():
                 json_data = df.to_json(orient='records')
                 all_sheets_json[sheet_name] = json_data
-
             with open('sheets_output.json', 'w') as json_file:
                 json.dump(all_sheets_json, json_file)
         elif file.name.endswith('.csv'):
@@ -1556,8 +1350,6 @@ def retrieveData(request):
             return data
     except Exception as e:
         return data
-
-
 @csrf_exempt
 def obtainVarientForCategory(request):
     category_id = request.GET.get("id")
@@ -1637,7 +1429,6 @@ def obtainVarientForCategory(request):
         }
         ]
     result = list(category_varient.objects.aggregate(*pipeline))
-    
     data = dict()
     data['category_varient_id'] = ""
     if len(result)>0:
@@ -1662,8 +1453,6 @@ def obtainVarientForCategory(request):
                 i['option_value_list'] = []
     data['varient_list'] = result
     return data
-
-
 @csrf_exempt
 def createVarientOption(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
@@ -1688,9 +1477,6 @@ def createVarientOption(request):
             varient_option_obj_check = DatabaseModel.save_documents(varient_option,{'option_name_id':type_name_id,'client_id':ObjectId(client_id),'category_str':category_id,'category_str':category_id})
             varient_option_obj_check_id = [varient_option_obj_check.id]
             varient_option_id = varient_option_obj_check.id
-        # else:
-        # varient_option_obj = DatabaseModel.save_documents(varient_option,{'option_name_id':type_name_id})
-        # varient_option_id = varient_option_obj.id
     else:
         type_name_id = DatabaseModel.save_documents(type_name,{'name':name})
         varient_option_obj_check = DatabaseModel.get_document(varient_option.objects,{'option_name_id':type_name_id,'client_id':ObjectId(client_id),'category_str':category_id})
@@ -1707,15 +1493,11 @@ def createVarientOption(request):
         data['is_created'] = False
         data['error'] = "Variant already Exists"
         return data
-    
     obtainlogForCategoryVarientOption(category_id,varient_option_id,"create",ObjectId(user_login_id),category_level,{})
     DatabaseModel.update_documents(category_varient.objects,{"id":category_varient_id},{'add_to_set__varient_option_id_list':varient_option_id})
-    
     data = dict()
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createValueForVarientName(request):
     json_req = JSONParser().parse(request)
@@ -1758,41 +1540,65 @@ def traverse_categories(category, result_list):
             traverse_categories(sub_category, result_list)
     else:
         result_list.append({'id': category.id, 'name': category.name})
-        
 def obtainDashboardCount(request):
     client_id = get_current_client()
+    if not client_id:
+        logger.error("No client_id found")
+        return {
+            'total_product': 0,
+            'total_brand': 0,
+            'total_parent_level_category': 0,
+            'total_last_level_category': 0,
+            'category_project_dict': {},
+            'parent_level_category_list': [],
+            'varent_list': [],
+            'error': 'Invalid client'
+        }
+    
+    cache_key = f"dashboard:{client_id}"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        return cached_data
     
     try:
-        # Get counts from individual collections
         total_product = products.objects(client_id=ObjectId(client_id)).count()
         total_brand = brand.objects(client_id=ObjectId(client_id)).count()
-        # Get category stats using the original logic
+        
         last_all_ids = []
         category_list = DatabaseModel.list_documents(category.objects, {'client_id': client_id})
         parent_level_category_list = []
         seen = set()
         
+        # ✅ FIX: Get ALL counts ONCE, BEFORE the loop
+        all_counts_pipeline = [
+            {'$group': {'_id': '$category_id', 'count': {'$sum': 1}}}
+        ]
+        all_counts = list(product_category_config.objects.aggregate(*all_counts_pipeline))
+        counts_dict = {item['_id']: item['count'] for item in all_counts}
+        
         for category_obj in category_list:
             key = (str(category_obj.id), category_obj.name)
             if key[1] not in seen:
                 seen.add(key[1])
-                parent_end_level_ids=[]
-                traverse_categories(category_obj,parent_end_level_ids)
-                product_count=0
-                for end_cat in parent_end_level_ids:
-                    count=DatabaseModel.count_documents(product_category_config.objects,{'category_id':str(end_cat['id'])})
-                    product_count+=count
-                parent_level_category_list.append({'id': key[0], 'name': key[1],'product_count':product_count})
+                parent_end_level_ids = []
+                traverse_categories(category_obj, parent_end_level_ids)
+                
+                # ✅ FIX: Use the pre-fetched counts_dict
+                product_count = sum(counts_dict.get(str(cat['id']), 0) for cat in parent_end_level_ids)
+                
+                parent_level_category_list.append({
+                    'id': key[0], 
+                    'name': key[1], 
+                    'product_count': product_count
+                })
             traverse_categories(category_obj, last_all_ids)
         
         category_project_dict = {}
         end_level_count_list = []
         
+        # ✅ FIX: counts_dict is now defined before this loop
         for i in last_all_ids:
-            product_category_config_count = DatabaseModel.count_documents(
-                product_category_config.objects, 
-                {'category_id': str(i['id'])}
-            )
+            product_category_config_count = counts_dict.get(str(i['id']), 0)
             if product_category_config_count > 0:
                 category_project_dict[i['name']] = product_category_config_count
                 end_level_count_list.append(str(i['id']))
@@ -1800,11 +1606,8 @@ def obtainDashboardCount(request):
         total_last_level_category = len(set(end_level_count_list))
         total_parent_level_category = len(category_list)
         
-        # Get variant stats
         pipeline = [
-            {
-                '$match': {'client_id': ObjectId(client_id)}
-            },
+            {'$match': {'client_id': ObjectId(client_id)}},
             {
                 '$lookup': {
                     'from': 'type_name',
@@ -1813,12 +1616,7 @@ def obtainDashboardCount(request):
                     'as': 'type_name'
                 }
             },
-            {
-                '$unwind': {
-                    'path': '$type_name',
-                    'preserveNullAndEmptyArrays': True
-                }
-            },
+            {'$unwind': {'path': '$type_name', 'preserveNullAndEmptyArrays': True}},
             {
                 '$lookup': {
                     'from': 'type_value',
@@ -1827,26 +1625,19 @@ def obtainDashboardCount(request):
                     'as': 'type_value'
                 }
             },
-            {
-                '$unwind': {
-                    'path': '$type_value',
-                    'preserveNullAndEmptyArrays': True
-                }
-            },
+            {'$unwind': {'path': '$type_value', 'preserveNullAndEmptyArrays': True}},
             {
                 '$group': {
                     "_id": "$type_name._id",
                     "type_name": {'$first': "$type_name.name"},
-                    'option_value_list': {
-                        "$push": "$type_value.name",
-                    }
+                    'option_value_list': {"$push": "$type_value.name"}
                 }
             },
             {
                 '$project': {
                     "_id": 0,
                     "type_name": 1,
-                    'option_value_count': {'$size': '$option_value_list'},
+                    'option_value_count': {'$size': '$option_value_list'}
                 }
             }
         ]
@@ -1859,24 +1650,24 @@ def obtainDashboardCount(request):
             'total_parent_level_category': total_parent_level_category,
             'total_last_level_category': total_last_level_category,
             'category_project_dict': category_project_dict,
-            'parent_level_category_list': parent_level_category_list,  # Add this for React
+            'parent_level_category_list': parent_level_category_list,
             'varent_list': varent_list
         }
         
+        cache.set(cache_key, data, 300)
         return data
         
     except Exception as e:
-        logger.error(f"Error in obtainDashboardCount: {str(e)}")
+        logger.exception(f"Error in obtainDashboardCount: {str(e)}")
         return {
             'total_product': 0,
             'total_brand': 0,
             'total_parent_level_category': 0,
             'total_last_level_category': 0,
             'category_project_dict': {},
-            'parent_level_category_list': [],  # Add this for React
+            'parent_level_category_list': [],
             'varent_list': []
         }
-        
 @csrf_exempt
 def swapProductToCategory(request):
     json_req = JSONParser().parse(request)
@@ -1898,11 +1689,6 @@ def swapProductToCategory(request):
         DatabaseModel.save_documents(category_varient,{'category_id':category_id,'varient_option_id_list':varient_option_id_list,"category_level":category_name})
     data['is_update'] = True
     return data
-
-
-
-
-
 @csrf_exempt
 def createAndAddVarient(request):
     data = dict()
@@ -1927,30 +1713,22 @@ def createAndAddVarient(request):
         return data
     data['status'] = True
     return data
-
-
 def logForCategory(category_id,action,user_id,level,dict_datas):
     DatabaseModel.save_documents(category_log,{"category_id":str(category_id),"action":str(action),"user_id":ObjectId(user_id),'level':level,'data':dict_datas})
     return 1
-
 def obtainlogForCategoryVarientOption(category_id,category_varient_option_id,action,user_id,category_level,dict_datas):
     DatabaseModel.save_documents(category_varient_option_log,{"category_id":str(category_id),"category_varient_option_id":ObjectId(category_varient_option_id),"user_id":ObjectId(user_id),'action':action,'level':category_level,'data':dict_datas})
     return 1
-
 def logForCreateProduct(product_id,user_id,action,dict_datas):
     if not isinstance(dict_datas,dict) or dict_datas is None:
         dict_datas={}
     DatabaseModel.save_documents(product_log,{"product_id":ObjectId(product_id),"user_id":ObjectId(user_id),'action':action,'data':dict_datas})
     return 1
-
 def logForCreateProductVarient(product_varient_id,user_id,action,dict_datas):
     if not isinstance(dict_datas,dict) or dict_datas is None:
         dict_datas={}
     DatabaseModel.save_documents(product_varient_log,{"product_varient_id":ObjectId(product_varient_id),"user_id":ObjectId(user_id),'action':action,'data':dict_datas})
     return 1
-
-
-
 @csrf_exempt
 def obtainCategoryLog(request):
     try:
@@ -2016,8 +1794,6 @@ def obtainCategoryLog(request):
     except Exception as e:
         print(f"Error in obtainCategoryLog: {str(e)}")
         return {'result': [], 'error': str(e)}
-
-
 @csrf_exempt
 def obtainCategoryVarientLog(request):
     client_id = get_current_client()
@@ -2078,7 +1854,6 @@ def obtainCategoryVarientLog(request):
                 'preserveNullAndEmptyArrays': True
             }
         },
-        
         {
             '$group': {
                 "_id":None,
@@ -2098,12 +1873,8 @@ def obtainCategoryVarientLog(request):
             i['log_date'] = convert_to_timezone(original_date, 'US/Eastern').strftime('%Y-%m-%d %H:%M:%S')
         data['result'] = result[0]['category_varient_log_list']
         data['result'] = sorted(data['result'], key=lambda x: x['log_date'],reverse=True)
-
         return data
     return data
-
-
-
 @csrf_exempt
 def obtainProductLog(request):
     json_req = json.loads(request.body.decode("utf-8")) if request.body else {}
@@ -2168,19 +1939,13 @@ def obtainProductLog(request):
             i['log_date'] = convert_to_timezone(original_date, 'US/Eastern').strftime('%Y-%m-%d %H:%M:%S')
         data['result']  = result[0]['category_varient_log_list']
         data['result'] = sorted(data['result'], key=lambda x: x['log_date'],reverse=True)
-        
         return data
     return data
-
-
-
 def convert_to_timezone(dt, tz_name):
     target_tz = timezone(tz_name)
     if is_naive(dt):
         dt = make_aware(dt)
     return dt.astimezone(target_tz)
-
-
 @csrf_exempt
 def obtainProductVarientLog(request):
     json_req = json.loads(request.body.decode("utf-8")) if request.body else {}
@@ -2261,8 +2026,7 @@ def obtainProductVarientLog(request):
         data['result'] = sorted(data['result'], key=lambda x: x['log_date'],reverse=True)
         return data
     return data
-
-from django.conf import settings # type: ignore
+from django.conf import settings 
 @csrf_exempt
 def createBrand(request):
     name = request.POST.get('name')
@@ -2274,7 +2038,6 @@ def createBrand(request):
     city = request.POST.get('city')
     state = request.POST.get('state')
     zip = request.POST.get('zip_code')
-    # phone_number = request.POST.get('mobile_number')
     image_file = request.FILES.get('logo')
     client_id = get_current_client()
     brand_obj = DatabaseModel.get_document(brand.objects,{'name':name,'client_id':client_id})
@@ -2285,14 +2048,9 @@ def createBrand(request):
         return data
     else:
         if image_file:
-            # Define the path where the image will be stored
-            upload_dir = os.path.join(settings.MEDIA_ROOT, 'brands')  # Ensure this path exists
+            upload_dir = os.path.join(settings.MEDIA_ROOT, 'brands')  
             os.makedirs(upload_dir, exist_ok=True)
-
-            # Create the full path for the uploaded file
             file_path = os.path.join("media/brands/", image_file.name)
-            
-            # Save the file to the defined path
             with open(file_path, 'wb+') as destination:
                 for chunk in image_file.chunks():
                     destination.write(chunk)  
@@ -2305,31 +2063,26 @@ def createBrand(request):
         brand_obj = DatabaseModel.save_documents(brand,{'name':name,'logo':file_path,'email':email,'mobile_number':mobile_number,'city': city,'state':state, 'zip_code': zip,'address':address,'website':website,'number_of_feeds':number_of_feeds})
     data['is_created'] = True
     return data
-
 from django.http import JsonResponse
 def obtainBrand(request):
     client_id = get_current_client()
     brand_id = request.GET.get('id')
     base_url = f"{request.scheme}://{request.get_host()}/"
-    
-    # Build match stage
     match_stage = {'client_id': ObjectId(client_id)}
     if brand_id:
         match_stage['_id'] = ObjectId(brand_id)
-    
-    # Single aggregation with $lookup
     pipeline = [
         {'$match': match_stage},
         {'$sort': {'_id': -1}},
         {
             '$lookup': {
                 'from': 'products',
-                'let': {'brand_id': '$_id'},  # ✅ Keep as ObjectId (removed $toString)
+                'let': {'brand_id': '$_id'},  
                 'pipeline': [
                     {
                         '$match': {
                             '$expr': {
-                                '$eq': ['$brand_id', '$$brand_id']  # ✅ Now both are ObjectId
+                                '$eq': ['$brand_id', '$$brand_id']  
                             }
                         }
                     },
@@ -2375,136 +2128,50 @@ def obtainBrand(request):
             }
         }
     ]
-    
     result = list(brand.objects.aggregate(pipeline))
-    
     return {
         'brand_list': result,
         'brand_count': len(result)
     }
-    # pipeline = [
-    #     match,
-    # {
-    #         '$group': {
-    #             "_id":'$_id',
-    #             # "brand_list":{'$push':{"id":"$_id",'name':'$name','brand_number':'$brand_number','logo':'$logo'}}
-    #             'brand_number':{'$first':'$brand_number'},
-    #             'name':{'$first':'$name'},
-    #             'email':{'$first':'$email'},
-    #             'mobile_number':{'$first':'$mobile_number'},
-    #             'address':{'$first':'$address'},
-    #             'city':{'$first':'$city'},
-    #             'state':{'$first':'$state'},
-    #             'zip_code':{'$first':'$zip_code'},
-    #             'website':{'$first':'$website'},
-    #             'number_of_feeds':{'$first':'$number_of_feeds'},
-    #             'logo':{'$first':'$logo'},
-    #     }
-    #     },{
-    #         '$project':{
-    #             '_id':1,
-    #             'brand_number':1,
-    #             'name':1,
-    #             'email':1,
-    #             'mobile_number':1,
-    #             'city':1,
-    #             'state':1,
-    #             'zip_code':1,
-    #             'address':1,
-    #             'website':1,
-    #             'number_of_feeds':1,
-    #             'logo':1,
-    #         }
-    #     },
-    # #     {
-    # #     '$addFields': {
-    # #         'name_lowercase': { '$toLower': "$name" }
-    # #     }
-    # # },
-    # {
-    #     '$sort': { '_id': -1 }
-    # },
-    # ]
-    # protocol = 'http'  # You can adjust to 'https' if needed
-    
-    # # Get the domain (IP or domain name)
-    # host = request.get_host()  # Example: 192.168.1.100:8000
-
-    # # Construct the full URL (protocol + host)
-    # base_url = f"{protocol}://{host}/"
-
-    # for i in brand_list:
-    #     i['id'] = str (i['_id'])
-    #     products_list = DatabaseModel.list_documents(products.objects,{'brand_id':i['id']})
-    #     i['product_count'] = len(products_list)
-    #     i['sku_count'] = 0
-    #     for j in products_list:
-    #         i['sku_count'] += len(j.options)
-    #     del i['_id']
-    #     if i['logo']:
-    #         i['logo'] = base_url + i['logo'].lstrip('/')
-    # data['brand_list'] = brand_list
-    # data['brand_count'] = len(data['brand_list'])
-    # print('brands',data)
-    # return data
-
-
 import logging
 import chardet
-
 logger = logging.getLogger(__name__)
 import logging
 import chardet
 from io import BytesIO, StringIO
-
 logger = logging.getLogger(__name__)
-
 @csrf_exempt
 def upload_file(request):
     logger.info("upload_file function called")
-    
     data = dict()
     data['status'] = False
     vendor_id = request.POST.get('vendor_id')
     logger.info(f"Vendor ID: {vendor_id}")
-    
     if 'file' not in request.FILES:
         logger.warning("No file found in request.FILES")
         data['error'] = "No file uploaded"
         return data
-    
     file = request.FILES['file']
     logger.info(f"File received: {file.name}, Size: {file.size} bytes")
-    
     try:
         if file.name.endswith('.xlsx'):
             logger.info("Processing XLSX file")
             df = pd.read_excel(file)
         elif file.name.endswith('.csv') or file.name.endswith('.txt'):
             logger.info("Processing CSV/TXT file")
-            
-            # Read file content
             file.seek(0)
             raw_data = file.read()
-            
-            # Detect encoding
             detected = chardet.detect(raw_data)
             encoding = detected['encoding']
             confidence = detected['confidence']
             logger.info(f"Detected encoding: {encoding} (confidence: {confidence})")
-            
-            # List of encodings to try in order
             encodings_to_try = []
             if encoding:
                 encodings_to_try.append(encoding)
             encodings_to_try.extend(['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252', 'utf-16', 'utf-8-sig'])
-            
-            # Remove duplicates while preserving order
             encodings_to_try = list(dict.fromkeys(encodings_to_try))
-            
             df = None
             last_error = None
-            
             for enc in encodings_to_try:
                 try:
                     logger.info(f"Trying encoding: {enc}")
@@ -2516,7 +2183,6 @@ def upload_file(request):
                     last_error = str(e)
                     logger.debug(f"Failed with encoding {enc}: {last_error}")
                     continue
-            
             if df is None:
                 logger.warning("Trying last resort with error handling")
                 try:
@@ -2531,50 +2197,36 @@ def upload_file(request):
             logger.warning(f"Unsupported file format: {file.name}")
             data['error'] = "Unsupported file format. Please upload .xlsx, .csv, or .txt file"
             return data
-            
         logger.info(f"DataFrame loaded successfully. Shape: {df.shape}")
-        
     except Exception as e:
         logger.error(f"Error reading file: {str(e)}", exc_info=True)
         data['error'] = f"Error reading file: {str(e)}"
         return data
-    
-    # Check if DataFrame is empty
     if df is None or df.empty:
         logger.warning("DataFrame is empty")
         data['error'] = "The uploaded file is empty or could not be read"
         return data
-    
     try:
-        # Clean column names - strip whitespace
         df.columns = df.columns.str.strip()
-        
         row_dict = df.iloc[0].to_dict()
-        keys_list = list(df.columns)  # Use df.columns instead of row_dict.keys()
+        keys_list = list(df.columns)  
         logger.info(f"Total columns extracted: {len(keys_list)}")
         logger.debug(f"Column names: {keys_list}")
     except Exception as e:
         logger.error(f"Error extracting columns: {str(e)}")
         data['error'] = "Error extracting column headers from file"
         return data
-    
-    # Exclude Option fields and Image fields (commented out in original)
     exclude_fields = [key for key in keys_list if re.match(r"^Option\d+.*", key)]
     logger.info(f"Excluded Option fields: {exclude_fields}")
-    
     filtered_keys = [key for key in keys_list if key not in exclude_fields]
     logger.info(f"Filtered keys count: {len(filtered_keys)}")
-    
     data['extract_list'] = filtered_keys
-    
     user_id = get_current_user()
     logger.info(f"Current user ID: {user_id}")
-    
     xl_mapping_obj = DatabaseModel.get_document(
         xl_mapping.objects, 
         {'user_id': user_id, 'vendor_id': vendor_id}
     )
-    
     if xl_mapping_obj:
         logger.info(f"XL mapping object found in database with {len(xl_mapping_obj.data)} mappings")
         data['Database_list'] = xl_mapping_obj.data
@@ -2602,7 +2254,6 @@ def upload_file(request):
             "OPTIONS": "OPTIONS",
             "Image Src": "Image Src"
         }
-    
     data['Database_options'] = [
         "MPN", "model", "upc_ean", "product_name", "long_description", 
         "short_description", "Vendor Name", "Product Category", "Type", 
@@ -2610,52 +2261,39 @@ def upload_file(request):
         "Finished_Price", "Key_Features", "stock", "Dimensions", "OPTIONS", 
         "Image Src"
     ]
-    
     upload_dir = 'uploads/'
     if not os.path.exists(upload_dir):
         logger.info(f"Creating upload directory: {upload_dir}")
         os.makedirs(upload_dir)
-    
     try:
-        # Save the original file
         file.seek(0)
         fs = FileSystemStorage(location=upload_dir)
         filename = fs.save(file.name, file)
         file_path = os.path.join(fs.location, filename)
         logger.info(f"File saved successfully at: {file_path}")
-        
         data['file_path'] = file_path
     except Exception as e:
         logger.error(f"Error saving file: {str(e)}", exc_info=True)
         data['error'] = f"Error saving file: {str(e)}"
         return data
-    
     data['vendor_id'] = vendor_id
     data['status'] = True
-    
     logger.info(f"upload_file completed successfully. Extracted {len(filtered_keys)} columns")
     return data
-
 import logging
 import chardet
 from io import StringIO
-
 logger = logging.getLogger(__name__)
-
 @csrf_exempt
 def saveXlData(request):
     logger.info("saveXlData function called")
-    
     data = dict()
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     field_data = request.POST.get('field_data')
     file_path = request.POST.get('file_path')
     vendor_id = request.POST.get('vendor_id', '')
-    
     logger.info(f"User: {user_login_id}, Vendor: {vendor_id}, File: {file_path}")
-    
     data['status'] = False
-    
     try:
         field_data = json.loads(field_data)
         logger.info(f"Field data parsed successfully with {len(field_data)} mappings")
@@ -2663,13 +2301,10 @@ def saveXlData(request):
         logger.error(f"Error parsing field_data JSON: {str(e)}")
         data['error'] = "Invalid field mapping data"
         return data
-    
-    # Save/Update XL mapping
     xl_mapping_obj = DatabaseModel.get_document(
         xl_mapping.objects, 
         {'user_id': user_login_id, 'vendor_id': vendor_id}
     )
-    
     if xl_mapping_obj:
         logger.info("Updating existing XL mapping")
         DatabaseModel.update_documents(
@@ -2683,8 +2318,6 @@ def saveXlData(request):
             xl_mapping,
             {'data': field_data, 'user_id': user_login_id, 'vendor_id': ObjectId(vendor_id)}
         )
-    
-    # Extract field mappings
     model_column_key = field_data.get('model')
     upc_ean_key = field_data.get('upc_ean')
     mpn_key = field_data.get('MPN')
@@ -2704,7 +2337,6 @@ def saveXlData(request):
     stockv_key = field_data.get('stock')
     dimensions_key = field_data.get('Dimensions')
     images_key = field_data.get('Image Src')
-    
     client_id = get_current_client()
     brands_cache={}
     for b in brand.objects.filter(client_id=client_id).only('id','name'):
@@ -2765,33 +2397,24 @@ def saveXlData(request):
     bulk_price_logs=[]
     bulk_product_variant_options=[]
     bulk_variant_options=[]
-    # Read and parse file with encoding handling
     try:
         if not os.path.exists(file_path):
             logger.error(f"File not found: {file_path}")
             data['error'] = "File not found"
             return data
-        
         logger.info(f"Reading file: {file_path}")
-        
         if file_path.endswith('.xlsx'):
             logger.info("Processing XLSX file")
             with open(file_path, 'rb') as file:
                 df = pd.read_excel(file)
         elif file_path.endswith('.csv') or file_path.endswith('.txt'):
             logger.info("Processing CSV/TXT file with encoding detection")
-            
-            # Read file content for encoding detection
             with open(file_path, 'rb') as file:
                 raw_data = file.read()
-            
-            # Detect encoding
             detected = chardet.detect(raw_data)
             encoding = detected['encoding']
             confidence = detected['confidence']
             logger.info(f"Detected encoding: {encoding} (confidence: {confidence})")
-            
-            # List of encodings to try
             encodings_to_try = []
             if encoding:
                 encodings_to_try.append(encoding)
@@ -2799,13 +2422,9 @@ def saveXlData(request):
                 'utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 
                 'windows-1252', 'utf-16', 'utf-8-sig'
             ])
-            
-            # Remove duplicates
             encodings_to_try = list(dict.fromkeys(encodings_to_try))
-            
             df = None
             last_error = None
-            
             for enc in encodings_to_try:
                 try:
                     logger.info(f"Trying encoding: {enc}")
@@ -2817,7 +2436,6 @@ def saveXlData(request):
                     last_error = str(e)
                     logger.debug(f"Failed with encoding {enc}: {last_error}")
                     continue
-            
             if df is None:
                 logger.warning("Trying last resort with latin-1 and error handling")
                 try:
@@ -2832,11 +2450,8 @@ def saveXlData(request):
             logger.warning(f"Unsupported file format: {file_path}")
             data['error'] = "Unsupported file format"
             return data
-        
-        # Clean column names
         df.columns = df.columns.str.strip()
         logger.info(f"DataFrame loaded successfully. Shape: {df.shape}")
-        
     except FileNotFoundError:
         logger.error(f"File not found: {file_path}")
         data['error'] = "File not found"
@@ -2845,15 +2460,11 @@ def saveXlData(request):
         logger.error(f"Error reading file: {str(e)}", exc_info=True)
         data['error'] = f"Error reading file: {str(e)}"
         return data
-    
-    # Check if DataFrame is empty
     if df is None or df.empty:
         logger.warning("DataFrame is empty")
         data['is_error'] = True
         data['error'] = "Excel file should not be empty"
         return data
-    
-    # Initialize counters
     data['error_list'] = []
     data['is_error'] = False
     data['error_count'] = 0
@@ -2862,20 +2473,14 @@ def saveXlData(request):
     data['total_products'] = 0
     optimize_dict = {}
     product_cache={}
-    # model_key = str(model).strip() if model else None
     logger.info(f"Starting to process {len(df)} rows")
-    
-    # Process each row
     for i in range(len(df)):
         dict_error = dict()
         data['total_products'] += 1
         dict_error['is_error'] = False
         dict_error['error_list'] = list()
-        
         try:
             row_dict = df.iloc[i].to_dict()
-            
-            # Extract values with NaN handling
             model = "" if isinstance(row_dict.get(model_column_key), float) and math.isnan(row_dict.get(model_column_key)) else row_dict.get(model_column_key)
             upc_ean = "" if isinstance(row_dict.get(upc_ean_key), float) and math.isnan(row_dict.get(upc_ean_key)) else row_dict.get(upc_ean_key)
             mpn = "" if isinstance(row_dict.get(mpn_key), float) and math.isnan(row_dict.get(mpn_key)) else row_dict.get(mpn_key)
@@ -2895,11 +2500,8 @@ def saveXlData(request):
             category_level = None if isinstance(row_dict.get(category_level_key), float) and math.isnan(row_dict.get(category_level_key)) else row_dict.get(category_level_key)
             dimensions = "" if isinstance(row_dict.get(dimensions_key), float) and math.isnan(row_dict.get(dimensions_key)) else row_dict.get(dimensions_key)
             model_key = str(model).strip() if model else None
-
-            # Validation
             options = []
             flag = False
-            
             if model == "" or model == None:
                 dict_error['error-row'] = i + 2
                 dict_error['error_list'].append("Model Name is Mandatory")
@@ -2935,17 +2537,8 @@ def saveXlData(request):
                 dict_error['error_list'].append("Long Description is Mandatory")
                 dict_error['is_error'] = True
                 flag = True
-            
             if flag == False:
                 data['added_count'] +=1
-
-            # if isinstance(model,str) == False and isinstance(upc_ean,str) == False and isinstance(Variant_SKU,str) == False  and isinstance(category_level,str) == False:
-            #     break
-            # if isinstance(model,str) == False:
-            #     is_varient = True
-            # else:
-            #     is_varient = False
-            # model_key = str(model).strip() if model else None
             model_lookup_key=model_key.lower() if model_key else None
             product_obj=None
             is_varient=False
@@ -2967,14 +2560,6 @@ def saveXlData(request):
             while f'Option{option_number} Name' in row_dict and f'Option{option_number} Value' in row_dict:
                 option_name = row_dict[f'Option{option_number} Name']
                 option_value = row_dict[f'Option{option_number} Value']
-                # if is_varient:
-                #     if len(option_name_list) >= option_number:
-                #         option_name = option_name_list[option_number - 1]
-                #     else:
-                #         option_number += 1
-                #         continue
-                # else:
-                #     option_name_list.append(option_name)
                 if isinstance(option_name, str) and isinstance(option_value,str):
                     options.append({"name":option_name,"value": option_value})
                 option_number += 1
@@ -2985,8 +2570,6 @@ def saveXlData(request):
             else:
                 img_src = []
             product_name = product_name.title()
-            # if not is_varient:
-            #     product_obj = DatabaseModel.get_document(products.objects,{'model':model,'client_id':ObjectId(client_id)})
             if not is_varient:
                 if model_lookup_key in products_cache:
                     product_id=products_cache[model_lookup_key]
@@ -2997,7 +2580,6 @@ def saveXlData(request):
                 if isinstance(category_level,str):
                     category_list = [item.strip() for item in category_level.split('>')]
             if product_obj==None:
-                
                 category_list = []
                 if isinstance(category_level, str):
                     category_list = [item.strip() for item in category_level.split('>')]
@@ -3109,9 +2691,6 @@ def saveXlData(request):
                     logForCreateProduct(product_id,user_login_id,"Updated",update_dict)
                     if model_key:
                         product_cache[model_key]=product_id
-            # product_obj.image = img_src
-            # product_obj.save()
-            # product_category_config_obj = DatabaseModel.get_document(product_category_config.objects,{'product_id':product_id})
             cat_retail_price = 1
             retail_price = "0"
             if Finished_Price == None:
@@ -3121,7 +2700,6 @@ def saveXlData(request):
             if 'category_id' not in locals():
                 product_category_config_obj = DatabaseModel.get_document(product_category_config.objects,{'product_id':product_id})
                 category_id = product_category_config_obj.category_id if product_category_config_obj else None
-
             if category_id:
                 brand_category_price_obj = DatabaseModel.get_document(brand_category_price.objects,{'category_id':ObjectId(category_id),'brand_id':product_obj.brand_id.id,'is_active':True})
                 if brand_category_price_obj:
@@ -3132,8 +2710,6 @@ def saveXlData(request):
                         retail_price = str(float(Un_Finished_Price) * float(cat_retail_price))
                 else:
                     retail_price = str(float(Finished_Price) * float(1))
-            # sku_number_list = [i.sku_number for i in product_obj.options]
-            # sku_number_id_list = [i.id for i in product_obj.options]
             if Variant_SKU not in variants_cache:
                 product_varient_obj = DatabaseModel.save_documents(product_varient,{"sku_number":Variant_SKU,"finished_price":str(Finished_Price),"un_finished_price":str(Un_Finished_Price),"quantity":str(stockv),"retail_price":retail_price})
                 variants_cache[Variant_SKU] = product_varient_obj.id
@@ -3142,7 +2718,6 @@ def saveXlData(request):
                     type_name_key=i['name'].title().lower()
                     if type_name_key in type_names_cache:
                         type_name_id=type_names_cache[type_name_key]
-
                     else:
                         type_name_obj = DatabaseModel.get_document(type_name.objects,{'name':i['name'].title()})
                         if type_name_obj==None:
@@ -3156,23 +2731,6 @@ def saveXlData(request):
                         type_value_obj = DatabaseModel.save_documents(type_value, {'name': str(i['value']).title()})
                         type_value_id = type_value_obj.id
                         type_values_cache[type_value_key] = type_value_id
-                        
-                    # if i['name'].title() in optimize_dict:
-                    #     type_name_id = optimize_dict[i['name'].title()] 
-                    # else:
-                    #     type_name_obj = DatabaseModel.get_document(type_name.objects,{'name':i['name'].title()})
-                    #     if type_name_obj ==None:
-                    #         type_name_obj = DatabaseModel.save_documents(type_name,{'name':i['name'].title()})   
-                    #     type_name_id = type_name_obj.id
-                    #     optimize_dict[i['name'].title()] = type_name_id
-                    # if str(i['value']).title() in optimize_dict:
-                    #     type_value_id = optimize_dict[str(i['value']).title()] 
-                    # else:
-                    #     type_value_obj = DatabaseModel.get_document(type_value.objects,{'name':str(i['value']).title()})
-                    #     if type_value_obj ==None:
-                    #         type_value_obj = DatabaseModel.save_documents(type_value,{'name':str(i['value']).title()})   
-                    #     type_value_id = type_value_obj.id
-                    #     optimize_dict[str(i['value']).title()] = type_value_id
                     product_varient_option_obj = DatabaseModel.save_documents(product_varient_option,{"option_name_id":type_name_id,"option_value_id":type_value_id})
                     DatabaseModel.update_documents(product_varient.objects,{"id":product_varient_obj.id},{"add_to_set__varient_option_id":product_varient_option_obj.id})
                     DatabaseModel.update_documents(products.objects,{"id":product_id},{"add_to_set__options":product_varient_obj.id,'add_to_set__image':image_str_list})
@@ -3186,8 +2744,6 @@ def saveXlData(request):
                     else:
                         varient_option_obj = DatabaseModel.save_documents(varient_option, {"option_name_id": type_name_id, 'category_str': str(category_id), 'client_id': client_id, "option_value_id_list": [type_value_id]})
                         varient_options_cache[vo_cache_key] = {'id': varient_option_obj.id,'option_value_ids': [str(type_value_id)]}
-                    
-
                     category_varient_obj = DatabaseModel.get_document(category_varient.objects,{'category_id':str(category_id)})
                     if category_varient_obj == None:
                         obtainlogForCategoryVarientOption(category_id,varient_option_obj.id,"create",ObjectId(user_login_id),category_level,{})
@@ -3195,7 +2751,6 @@ def saveXlData(request):
                     else:
                         obtainlogForCategoryVarientOption(category_id,varient_option_obj.id,"create",ObjectId(user_login_id),category_level,{})
                         DatabaseModel.update_documents(category_varient.objects,{"id":category_varient_obj.id},{'category_id':category_id,'add_to_set__varient_option_id_list':varient_option_obj.id})
-    
             else:
                 updated_fields = DatabaseModel.update_documents(product_varient.objects,{"sku_number":Variant_SKU,'client_id':client_id},{"finished_price":str(Finished_Price),"un_finished_price":str(Un_Finished_Price),"quantity":str(stockv),"retail_price":retail_price})
                 product_varient_obj = DatabaseModel.get_document(product_varient.objects,{"sku_number":Variant_SKU,'client_id':client_id})
@@ -3231,7 +2786,6 @@ def saveXlData(request):
                             DatabaseModel.update_documents(varient_option.objects,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id},{"add_to_set__option_value_id_list":type_value_id})
                         else:
                             varient_option_obj = DatabaseModel.save_documents(varient_option,{"option_name_id":type_name_id,'category_str':str(category_id),'client_id':client_id,"option_value_id_list":[type_value_id]})
-                        
                         category_varient_obj = DatabaseModel.get_document(category_varient.objects,{'category_id':str(category_id)})
                         if category_varient_obj == None:
                             obtainlogForCategoryVarientOption(category_id,varient_option_obj.id,"Updated",ObjectId(user_login_id),category_level,{})
@@ -3239,21 +2793,16 @@ def saveXlData(request):
                         else:
                             obtainlogForCategoryVarientOption(category_id,varient_option_obj.id,"Updated",ObjectId(user_login_id),category_level,{})
                             DatabaseModel.update_documents(category_varient.objects,{"id":category_varient_obj.id},{'category_id':category_id,'add_to_set__varient_option_id_list':varient_option_obj.id})
-
-                
         except Exception as e:
             logger.error(f"Error processing row {i + 2}: {str(e)}", exc_info=True)
             dict_error['error-row'] = i + 2
             dict_error['error_list'].append(f"Error processing row: {str(e)}")
             dict_error['is_error'] = True
-        
         if len(dict_error['error_list']) > 0:
             data['error_list'].append(dict_error)
             if dict_error['is_error']:
                 data['is_error'] = True
                 data['error_count'] += 1
-    
-    # Clean up uploaded file
     upload_dir = os.path.dirname(file_path)
     try:
         if os.path.exists(upload_dir) and os.path.isdir(upload_dir):
@@ -3279,10 +2828,7 @@ def saveXlData(request):
         )
     logger.info(f"Processed {len(bulk_logs)} category logs")
     data['status'] = True
-    
-    
     return data
-
 def obtainPriceLog(request):
     try:
         client_id = get_current_client()
@@ -3327,71 +2873,13 @@ def obtainPriceLog(request):
     }
 ]
         result_list = list(radial_price_log.objects.aggregate(pipeline))
-        
         return result_list
     except Exception as e:
         print(f"Error in obtainPriceLog: {str(e)}")
-# import requests
-# from bs4 import BeautifulSoup
-from django.http import JsonResponse # type: ignore
-
-# @csrf_exempt
-# def sampleData(req):
-#     data_list = data_fn()
-#     for data in data_list:
-#         category_name = "level-3"
-#         category_id = "6728c594f254bfbc4a59a6b6"
-#         product_obj = data['product_obj']
-#         product_obj_save = {
-#             "model" :product_obj['model'],
-#             "upc_ean" :product_obj['upc_ean'],
-#             "mpn" :product_obj['mpn'],     
-#             "breadcrumb":product_obj['breadcrumb'],
-#             "brand_id":ObjectId(product_obj['brand_id']),
-#             "product_name":product_obj['product_name'],
-#             "long_description":product_obj['long_description'],
-#             "short_description":product_obj['short_description'],
-#             "features":product_obj['features'],
-#             "attributes":product_obj['attributes'],
-#             "tags":product_obj['tags'],
-#             "msrp":str(product_obj['msrp']),
-#             "base_price":str(product_obj['base_price']),
-#             "key_features":product_obj['key_features'],
-#             "image":product_obj['image_str_list']
-#         }
-#         products_obj_1 = DatabaseModel.save_documents(products,product_obj_save)
-#         user_login_id = "6729ac25db9f51647ea76af4"
-#         for z in product_obj['varients']:
-#             product_varient_obj = DatabaseModel.save_documents(product_varient,{"sku_number":z['sku_number'],"finished_price":str(z['finished_price']),"un_finished_price":str(z['un_finished_price']),"quantity":z['quantity']})
-#             logForCreateProductVarient(product_varient_obj.id,user_login_id,"create")
-#             for i in z['options']:
-#                 type_name_obj = DatabaseModel.get_document(type_name.objects,{'name':i['name'].title()})
-#                 if type_name_obj ==None:
-#                     type_name_obj = DatabaseModel.save_documents(type_name,{'name':i['name'].title()})   
-#                 type_name_id = type_name_obj.id
-#                 type_value_obj = DatabaseModel.get_document(type_value.objects,{'name':i['value'].title()})
-#                 if type_value_obj ==None:
-#                     type_value_obj = DatabaseModel.save_documents(type_value,{'name':i['value'].title()})   
-#                 type_value_id = type_value_obj.id
-#                 product_varient_option_obj = DatabaseModel.save_documents(product_varient_option,{"option_name_id":type_name_id,"option_value_id":type_value_id})
-#                 DatabaseModel.update_documents(product_varient.objects,{"id":product_varient_obj.id},{"add_to_set__varient_option_id":product_varient_option_obj.id})
-#             DatabaseModel.update_documents(products.objects,{"id":products_obj_1.id},{"add_to_set__options":product_varient_obj.id})
-#         products_obj = DatabaseModel.save_documents(product_category_config,{'product_id':products_obj_1.id,'category_level':category_name,"category_id":category_id})
-#         logForCreateProduct(products_obj_1.id,user_login_id,"create")
-#     data = dict()
-#     data['status'] = True
-#     return JsonResponse(data)
-
-
-
-
+from django.http import JsonResponse 
 from .data_py import data_list_file
 def data_fn():
     return data_list_file
-
-
-
-#SuperAdmin
 @csrf_exempt
 def createClient(request):
     json_req = JSONParser().parse(request)
@@ -3408,8 +2896,6 @@ def createClient(request):
         client_obj = DatabaseModel.save_documents(client,{'name':name,'logo':logo,'location':location})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def obtainClient(request):
     data = dict()
@@ -3428,14 +2914,11 @@ def obtainClient(request):
             client_ins['id'] = str(client_ins['id'])
         data['client_list'] = client_list[0]['client_list']
     return data
-
-
 def obtainSuperAdminDashboard(request):
     data = dict()
     data['clients_count'] = DatabaseModel.count_documents(client.objects,{})
     data['active_users_count'] = 0
     return data
-
 @csrf_exempt
 def obtainClientDetail(request):
     client_id = request.GET.get("id")
@@ -3475,7 +2958,6 @@ def obtainClientDetail(request):
         client_list['id'] = str(client_list['id'])
         data['client_obj'] = client_list
     return data
-
 @csrf_exempt
 def addUserAndRoleForClient(request):
     json_req = JSONParser().parse(request)
@@ -3489,7 +2971,6 @@ def addUserAndRoleForClient(request):
         return data
     else:
         DatabaseModel.save_documents(user,{'name':user_obj['name'],'email':user_obj['email'],'role':user_obj['role'],'client_id':ObjectId(user_obj['id'])})
-
 @csrf_exempt
 def categoryLevelForChildCategory(request):
     json_req = JSONParser().parse(request)
@@ -3499,7 +2980,6 @@ def categoryLevelForChildCategory(request):
     dist_i['category_name'] = ""
     getCategoryLevelOrder(dist_i)
     return dist_i
-
 def obtainClientName(request):
     client_id = get_current_client()
     client_obj = DatabaseModel.get_document(client.objects,{'id':client_id})
@@ -3510,52 +2990,6 @@ def obtainClientName(request):
         data['name'] = client_obj.name
         data['logo'] = client_obj.logo
     return data
-
-# from django.http import JsonResponse
-# from django.views.decorators.csrf import csrf_exempt
-# from odf.opendocument import load
-# from odf.table import Table, TableRow, TableCell
-# import os
-
-# @csrf_exempt
-# def sampleData(request):
-#     data = {'status': False}
-#     if 'file' not in request.FILES:
-#         return JsonResponse(data, status=400)  # Return 400 Bad Request if no file is uploaded
-#     file = request.FILES['file']
-#     file_path = os.path.join('/tmp', file.name)
-#     try:
-#         with open(file_path, 'wb') as f:
-#             for chunk in file.chunks():
-#                 f.write(chunk)
-#         # Convert ODS to JSON
-#         json_data = ods_to_json(file_path)
-#         data['status'] = True
-#         data['data'] = json_data
-#         return JsonResponse(data, safe=False)
-#     finally:
-#         if os.path.exists(file_path):
-#             os.remove(file_path)  # Clean up the temporary file even if an error occurs
-
-# def ods_to_json(file_path):
-#     doc = load(file_path)
-#     data = []
-#     for sheet in doc.getElementsByType(Table):
-#         sheet_data = []
-#         for row in sheet.getElementsByType(TableRow):
-#             row_data = {}
-#             cells = row.getElementsByType(TableCell)
-#             if len(cells) > 1:
-#                 key = ''.join(node.nodeValue for node in cells[0].childNodes if node.nodeType == 3).strip() 
-#                 value = ''.join(node.nodeValue for node in cells[1].childNodes if node.nodeType == 3).strip()
-#                 if key and value:
-#                     row_data[key] = value
-#             if row_data:
-#                 sheet_data.append(row_data)
-#         if sheet_data:
-#             data.append(sheet_data)
-#     return data
-
 def  obtainAllLastLevelIds(request):
     client_id = get_current_client()
     last_all_ids = []
@@ -3585,7 +3019,6 @@ def  obtainAllLastLevelIds(request):
     data = dict()
     data['last_level_category'] = last_all_ids
     return data
-
 @csrf_exempt
 def obtainBrandCategoryWisePrice(request):
     json_req = JSONParser().parse(request)
@@ -3595,8 +3028,6 @@ def obtainBrandCategoryWisePrice(request):
     for i in  brand_category_price_obj_list:
         data['price_list'].append(i.price)
     return data
-
-
 def createBrandCategoryWisePrice(json_req):
     brand_category_price_obj_1 = DatabaseModel.list_documents(brand_category_price.objects,{'category_id__in':json_req['category_id_list'],'brand_id':ObjectId(json_req['brand_id'])})
     for i in brand_category_price_obj_1:
@@ -3614,8 +3045,7 @@ def createBrandCategoryWisePrice(json_req):
     data = dict()
     data['is_created'] = True
     return data
-
-from bson.dbref import DBRef # type: ignore
+from bson.dbref import DBRef 
 @csrf_exempt
 def updateRetailPrice(request):
     json_req = JSONParser().parse(request)
@@ -3623,7 +3053,6 @@ def updateRetailPrice(request):
     product_category_config_list = DatabaseModel.list_documents(product_category_config.objects,{'category_id__in':json_req['category_id_list']})
     createBrandCategoryWisePrice(json_req)
     old_price = '0'
-    
     for i in product_category_config_list:
         for j in i.product_id.options:
             if str(i.product_id.brand_id.id) == json_req['brand_id']:
@@ -3635,27 +3064,21 @@ def updateRetailPrice(request):
                     old_price = j.retail_price if 'retail_price' in j else '0'
                 if brand_category_price_obj:
                     if brand_category_price_obj.price_option == "finished_price":
-                        
                         if j.finished_price == '' or j.finished_price =='None'or j.finished_price ==None:
                             j.finished_price = '0' 
                         j.retail_price = str(float(j.finished_price) * float(json_req['price']))
                     else:
-                        
                         if j.un_finished_price == '' or j.un_finished_price =='None' or j.un_finished_price ==None:
                             j.un_finished_price = '0'
                         j.retail_price = str(float(j.un_finished_price) * float(json_req['price']))
                 if j.retail_price == None:
-                    
                     j.retail_price = "0"
             j.save()
             client_id = get_current_client()
-            
             createradial_price_log(j.id,str(old_price),str(j.retail_price),user_login_id,client_id)
     data = dict()
     data['is_updated'] = True
     return data
-
-
 @csrf_exempt
 def obtainBrandCategoryWisePriceTable(request):
     json_req = JSONParser().parse(request)
@@ -3682,14 +3105,10 @@ def obtainBrandCategoryWisePriceTable(request):
             category_obj = DatabaseModel.get_document(level_five_category.objects,{'id':brand_category_price_obj.category_id})
         data['category_list'].append({"category_name":str(category_obj.name),"id":str(brand_category_price_obj.category_id),"price":brand_category_price_obj.price,"brand_name":brand_category_price_obj.brand_id.name,"brand_id":str(brand_category_price_obj.brand_id.id),"is_active":brand_category_price_obj.is_active,'brand_category_price_id':str(brand_category_price_obj.id),'price_option':brand_category_price_obj.price_option})
     data['category_list'] = sorted(data['category_list'], key=lambda x: ObjectId(x['brand_category_price_id']),reverse=True)
-
     return data
-
-
 def createradial_price_log(product_varient_id,old_retail_price,new_retail_price,user_login_id,client_id):
     DatabaseModel.save_documents(radial_price_log,{"product_varient_id":product_varient_id,'old_retail_price':old_retail_price,'new_retail_price':new_retail_price,'user_id':ObjectId(user_login_id),'client_id':ObjectId(client_id)})
     return 1
-
 @csrf_exempt
 def updateActiveRetailPrice(request):
     json_req = JSONParser().parse(request)
@@ -3698,7 +3117,6 @@ def updateActiveRetailPrice(request):
     data = dict()
     data['is_updated'] = True
     return data
-    
 @csrf_exempt
 def obtainRetailBrandPrice(request):
     json_req = JSONParser().parse(request)
@@ -3712,7 +3130,6 @@ def obtainRetailBrandPrice(request):
         data['price_option'] = "finished_price"
     return data
 from django.core.mail import send_mail
-
 @csrf_exempt
 def createUser(request):
     client_id = get_current_client()
@@ -3733,34 +3150,24 @@ def createUser(request):
     )
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def obtainVarientOptionForRetailPrice(request):
     try:
         data = {'varient_option_list': []}
         client_id = get_current_client()
-        
         if not client_id:
             logger.error("No client_id found in request")
             return {'error': 'Client not found', 'varient_option_list': []}
-        
-        # Get all variant options for client
         varient_option_list = list(DatabaseModel.list_documents(
             varient_option.objects, 
             {'client_id': ObjectId(client_id)}
         ))
-        
         if not varient_option_list:
             return data
-        
-        # Collect all category IDs upfront
         category_ids = []
         for variant in varient_option_list:
             if variant.category_str:
                 category_ids.append(variant.category_str)
-        
-        # Batch fetch all categories (avoiding N+1)
         category_map = {}
         collections = [
             (category, "category"),
@@ -3770,7 +3177,6 @@ def obtainVarientOptionForRetailPrice(request):
             (level_two_category, "level_two"),
             (level_one_category, "level_one")
         ]
-        
         for collection, level in collections:
             try:
                 categories = collection.objects(id__in=category_ids).only('id', 'name')
@@ -3782,13 +3188,9 @@ def obtainVarientOptionForRetailPrice(request):
                     }
             except Exception as e:
                 logger.error(f"Error fetching {level} categories: {e}")
-        
-        # Batch fetch all product configs
         product_configs = list(product_category_config.objects(
     category_id__in=list(category_map.keys())
 ))
-        
-        # Create mapping of category_id to brand_id
         category_brand_map = {}
         for pc in product_configs:
             try:
@@ -3796,55 +3198,35 @@ def obtainVarientOptionForRetailPrice(request):
                     category_brand_map[pc.category_id] = str(pc.product_id.brand_id.id)
             except Exception as e:
                 logger.warning(f"Error processing product config: {e}")
-        
-        # Process variant options
         seen_option_ids = set()
-        
         for variant in varient_option_list:
             try:
-                # Skip if option_name_id is invalid
                 if not variant.option_name_id:
                     continue
-                    
                 option_id = str(variant.option_name_id.id)
-                
-                # Skip duplicates if needed
-                # if option_id in seen_option_ids:
-                #     continue
                 seen_option_ids.add(option_id)
-                
-                # Get category info
                 category_info = category_map.get(variant.category_str, {})
                 category_name = category_info.get('name')
                 category_id = category_info.get('id')
-                
-                # Get brand_id from mapping
                 brand_id = category_brand_map.get(category_id)
-                
-                # Format name with category
                 display_name = variant.option_name_id.name
                 if category_name:
                     display_name = f"{variant.option_name_id.name} ({category_name})"
-                
                 data['varient_option_list'].append({
                     'id': str(variant.id),
                     'name': display_name,
                     'brand_id': brand_id
                 })
-                
             except Exception as e:
                 logger.error(f"Error processing variant option {variant.id}: {e}")
                 continue
-        
         return data
-        
     except Exception as e:
         logger.exception(f"Error in obtainVarientOptionForRetailPrice: {e}")
         return {
             'error': 'An error occurred processing the request',
             'varient_option_list': []
         }
-
 @csrf_exempt
 def obtainVarientOptionValueForRetailPrice(request):
     data = dict()
@@ -3853,33 +3235,13 @@ def obtainVarientOptionValueForRetailPrice(request):
     data['varient_option_value_list'] = []
     varient_option_obj = DatabaseModel.get_document(varient_option.objects,{'id':option_name_id,'client_id':client_id})
     unique_ids = set()
-
     if varient_option_obj:
         for i in varient_option_obj.option_value_id_list:
             option_id = str(i.id)
             if option_id not in unique_ids:
                 data['varient_option_value_list'].append({'id':str(i.id),"name":i.name})
                 unique_ids.add(option_id)
-
     return data
-
-
-# @csrf_exempt
-# def updateRetailPriceForVarientOptionValue(request):
-#     json_req = JSONParser().parse(request)
-#     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
-#     percentage_price = json_req['percentage_price']
-#     products_list = DatabaseModel.list_documents(products.objects,{'brand':json_req['brand_id']})
-#     for i in products_list:
-#         for j in i.options:
-#             if json_req['option_name_id'] ==  str(j.varient_option_id.option_name_id.id)  and j.varient_option_id.option_value_id.id in json_req['option_value_id_list']:
-#                 if json_req['price_option'] == 'finished_price':
-#                     j.retail_price = ((j.finished_price/100)*percentage_price) + j.finished_price
-#                 else:
-#                     j.retail_price = ((j.un_finished_price/100)*percentage_price) + j.un_finished_price
-#     data = dict()
-#     data['is_updated'] = True
-#     return data
 @csrf_exempt
 def obtainProductBasedOnVarientOption(request):
     json_req = JSONParser().parse(request)
@@ -3962,7 +3324,6 @@ def obtainProductBasedOnVarientOption(request):
             "un_finished_price": { "$first": "$product_varient_ins.un_finished_price" },
             "retail_price": { "$first": "$product_varient_ins.retail_price" },
             "dimensions": { "$first": "$dimensions" },
-            
             "image_url": { "$first": "$image" },
             'varient_option_list': {
                 "$push": {
@@ -4056,7 +3417,6 @@ def obtainProductBasedOnVarientOption(request):
     data['result'] = result
     data['product_count'] = len(set(product_set))
     return data
-
 @csrf_exempt
 def saveChangesForVarientOption(request):
     json_req = JSONParser().parse(request)
@@ -4065,8 +3425,6 @@ def saveChangesForVarientOption(request):
     data['result_list'] = json_req['result_list']
     data['result_list'] = json_req['result_list']
     option_value_id_list = [ObjectId(i) for i in result_list[0]['option_value_id']]
-    
-    # revert_varient_retail_price_obj = DatabaseModel.get_document(revert_varient_retail_price.objects,{"brand_id" :ObjectId(brand_id),"type_name_id" :result_list[0]['option_name_id'],"type_value_id__in" :option_value_id_list,"current_price" :i['price'],'price_option':i['price_option']})   
     i = result_list[0]
     DatabaseModel.save_documents(revert_varient_retail_price,{"brand_id" :ObjectId(i['brand_id']),"type_name_id": i['option_name_id'],"type_value_id" :option_value_id_list,"current_price" :i['price'],'price_option':i['price_option'],'price_adding_sympol':i['price_adding_sympol']})
     for i in result_list:
@@ -4074,10 +3432,8 @@ def saveChangesForVarientOption(request):
         product_varient_obj.finished_price = str(i['finished_price'])
         product_varient_obj.un_finished_price = str(i['un_finished_price'])
         product_varient_obj.retail_price = str(i['retail_price'])
-        # product_varient_obj.dimensions = str(i['dimensions'])
         product_varient_obj.save()
     return data
-
 @csrf_exempt
 def obtainRevertPreviousAndCurrentPriceForCategory(request):
     json_req = JSONParser().parse(request)
@@ -4095,8 +3451,6 @@ def obtainRevertPreviousAndCurrentPriceForCategory(request):
         data['current_price'] = brand_category_price_list[0].price
         data['old_price'] = "0"
     return data
-
-
 @csrf_exempt
 def obtainRevertPreviousAndCurrentPriceForVarientOption(request):
     json_req = JSONParser().parse(request)
@@ -4116,7 +3470,6 @@ def obtainRevertPreviousAndCurrentPriceForVarientOption(request):
         data['current_price'] = revert_varient_retail_price_obj[0].current_price
         data['old_price'] = "0"
     return data
-
 @csrf_exempt
 def updateRevertPriceForCategory(request):
     json_req = JSONParser().parse(request)
@@ -4135,7 +3488,6 @@ def updateRevertPriceForCategory(request):
             brand_category_price_obj_1.is_active = True
             brand_category_price_obj_1.save()
             brand_category_price_obj_price = brand_category_price_obj_1.price
-            
         brand_category_price_obj_2 = DatabaseModel.get_document(brand_category_price.objects,{'category_id__in':json_req['category_id'],'brand_id':ObjectId(json_req['brand_id']),'price':current_price,'price_option':json_req['price_option']})
         if brand_category_price_obj_2:
             brand_category_price_obj_2.delete()
@@ -4164,7 +3516,6 @@ def updateRevertPriceForCategory(request):
         },{
             "$match":{'product_category_config_ins.category_id':{'$in':(json_req['category_id'])}}
         },
-        
         {
             '$lookup': {
                 "from": 'product_varient',
@@ -4186,7 +3537,6 @@ def updateRevertPriceForCategory(request):
             "finished_price": { "$first": "$product_varient_ins.finished_price" },
             "un_finished_price": { "$first": "$product_varient_ins.un_finished_price" },
             "retail_price": { "$first": "$product_varient_ins.retail_price" },
-            
         }
     }
     ]
@@ -4201,7 +3551,6 @@ def updateRevertPriceForCategory(request):
     data = dict()
     data['is_updated'] = True
     return data
-
 @csrf_exempt
 def updateRevertPriceForVarientOption(request):
     json_req = JSONParser().parse(request)
@@ -4232,7 +3581,6 @@ def updateRevertPriceForVarientOption(request):
         brand_category_price_obj_1 = DatabaseModel.get_document(revert_varient_retail_price.objects,
         {'brand_id':json_req['brand_id'],'type_name_id':json_req['option_name_id'],'type_value_id__in':type_value_id,'price_option':json_req['price_option'],'current_price':current_price})
         brand_category_price_obj_price = brand_category_price_obj_1.current_price
-        
         brand_category_price_obj_1.delete()
     price_option = json_req['price_option']
     pipeline = [
@@ -4347,7 +3695,6 @@ def updateRevertPriceForVarientOption(request):
         }
     ]
     result = list(products.objects.aggregate(*pipeline))
-    
     for i in result:
         i[price_option] = float(i[price_option])
         if price_symbol == '%':
@@ -4364,8 +3711,6 @@ def updateRevertPriceForVarientOption(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 def obtainUserBasedOnClient(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     client_id = get_current_client()
@@ -4375,7 +3720,6 @@ def obtainUserBasedOnClient(request):
     for i in user_obj_list:
         data['user_list'].append({'id':str(i['id']),'name':i['name'],'role':i['role'],'is_active':i['is_active'] if 'is_active' in i else False })
     return data
-
 @csrf_exempt
 def UpdateProductActiveInActive(request):
     try:
@@ -4391,7 +3735,6 @@ def UpdateProductActiveInActive(request):
         return {'is_update': True}
     except Exception as e:
         print(f" Error occured while updating product status",{e})
-
 @csrf_exempt
 def UpdateVarientActiveInActive(request):
     json_req = JSONParser().parse(request)
@@ -4402,7 +3745,6 @@ def UpdateVarientActiveInActive(request):
     data = dict()
     data['is_update'] = True
     return data
-
 @csrf_exempt
 def obtainInActiveProducts(request):
     client_id = get_current_client()
@@ -4410,7 +3752,6 @@ def obtainInActiveProducts(request):
     if search_term == None:
         search_term = ""
     pipeline = [
-        
         {
         '$lookup': {
             'from': 'products',
@@ -4422,7 +3763,6 @@ def obtainInActiveProducts(request):
     {
             '$unwind': {
                 'path': '$products',
-                # 'preserveNullAndEmptyArrays': True
             }
         }, {
         "$match":{'products.is_active':False}
@@ -4447,8 +3787,6 @@ def obtainInActiveProducts(request):
     {
         '$group': {
             "_id":'$_id',
-            # 'product_list': {
-            #     "$push": {
             'product_name':{'$first': "$products.product_name"},
             'product_id':{'$first': "$products._id"},
             'model':{'$first':"$products.model"},
@@ -4482,8 +3820,6 @@ def obtainInActiveProducts(request):
 ]
     }
   }
-        # }
-    # }
     ]
     result = list(product_category_config.objects.aggregate(*pipeline))
     data = dict()
@@ -4494,10 +3830,8 @@ def obtainInActiveProducts(request):
     data['product_list'] = result
     data['product_count'] = len(result)
     return data
-
 from functools import lru_cache
 from bson import ObjectId
-
 @lru_cache(maxsize=1024)
 def get_root_category_name(level_one_id):
     """Safely get root category name with caching"""
@@ -4506,12 +3840,9 @@ def get_root_category_name(level_one_id):
         {'level_one_category_list__in': [ObjectId(level_one_id)]}
     )
     return root.name if root else "Unknown Category"
-
 def build_breadcrumb(category_id, level):
     """Build full breadcrumb safely and efficiently"""
     breadcrumb = []
-    
-    # Map level string to model and parent field lookup
     level_config = {
         'level-1': (category, None, None),
         'level-2': (level_one_category, 'level_one_category_list__in', None),
@@ -4520,29 +3851,20 @@ def build_breadcrumb(category_id, level):
         'level-5': (level_four_category, 'level_four_category_list__in', 'level_three_category_list__in'),
         'level-6': (level_five_category, 'level_five_category_list__in', 'level_four_category_list__in'),
     }
-    
     if level not in level_config:
         return "Invalid Level", "Invalid Level"
-
     model, parent_field, grandparent_field = level_config[level]
-    
-    # Get current level object
     obj = DatabaseModel.get_document(model.objects, {'id': ObjectId(category_id)})
     if not obj:
         return "Deleted Category", "Deleted Category"
-    
     current_name = getattr(obj, 'name', 'Unknown')
     category_number = getattr(obj, 'category_number', '')
-    
-    # Walk up to root
     current_id = str(obj.id)
     current_level_num = int(level.split('-')[1])
-    
     while current_level_num > 1:
         prev_level_num = current_level_num - 1
         prev_model = level_config[f'level-{prev_level_num}'][0]
         field_name = level_config[f'level-{current_level_num}'][1]
-        
         parent = DatabaseModel.get_document(
             prev_model.objects,
             {field_name: [ObjectId(current_id)]}
@@ -4552,63 +3874,40 @@ def build_breadcrumb(category_id, level):
         breadcrumb.append(parent.name)
         current_id = str(parent.id)
         current_level_num -= 1
-    
-    # Add root category (level-0)
-    # if current_level_num == 1:
-    #     root_name = get_root_category_name(current_id)
-    #     breadcrumb.append(root_name)
-    
     breadcrumb.reverse()
     full_path = " > ".join(breadcrumb + [current_name])
     last_name = current_name
-    
     return full_path, last_name, category_number
-
-
 def obtainListofCategoryCombinations(request):
     client_id = get_current_client()
     if not client_id:
         return {'last_all_ids': []}
-    
     last_all_ids = []
-    
-    # Step 1: Get all leaf categories efficiently
     categories = DatabaseModel.list_documents(
         category.objects,
         {'client_id': ObjectId(client_id)}
     )
-    
     for cat in categories:
         def traverse(obj, path=None):
             if path is None:
                 path = []
-            
-            # Go as deep as possible
             children = []
             if hasattr(obj, 'level_one_category_list'):
                 children = obj.level_one_category_list
             elif hasattr(obj, 'level_two_category_list'):
                 children = obj.level_two_category_list
-            # ... add more if needed
-            
             if not children:
-                # Leaf node
                 last_all_ids.append({
                     'id': str(obj.id),
                     'level': f'level-{len(path) + 1}'
                 })
                 return
-            
             for child in children:
                 traverse(child, path + [obj])
-        
         traverse(cat)
-    
-    # Step 2: Build breadcrumbs safely and fast
     result = []
     for item in last_all_ids:
         full_name, last_name, cat_number = build_breadcrumb(item['id'], item['level'])
-        
         result.append({
             'id': item['id'],
             'category_name': full_name,
@@ -4616,9 +3915,7 @@ def obtainListofCategoryCombinations(request):
             'category_number': cat_number,
             'category_level_str': item['level']
         })
-    
     return {'last_all_ids': result}
-
 @csrf_exempt
 def updatevarientToReleatedCategories(request):
     json_req = JSONParser().parse(request)
@@ -4650,15 +3947,12 @@ def updatevarientToReleatedCategories(request):
     data = dict()
     data['is_updated']  = True
     return data
-
 @csrf_exempt
 def updateTaxonomyForProduct(request):
     json_req = JSONParser().parse(request)
     data  = dict()
     DatabaseModel.update_documents(product_category_config.objects,{'product_id':json_req['product_id']},{'category_id':json_req['category_id'],'category_level':json_req['category_level']})
     return data
-    
-
 @csrf_exempt
 def cloneProduct(request):
     json_req = JSONParser().parse(request)
@@ -4689,10 +3983,8 @@ def cloneProduct(request):
     print(f"Cloned product created with new ID: {product_obj.id}")
     data = dict()
     logForCreateProduct(product_id,user_login_id,"clone",{})
-
     data['is_created'] = True
     return data
-
 @csrf_exempt
 def cloneVarient(request):
     json_req = JSONParser().parse(request)
@@ -4713,13 +4005,11 @@ def cloneVarient(request):
             i.save()
             option_list.append(i.id)
             logForCreateProductVarient(i.id,user_login_id,"clone",{})
-
     product_obj.options=(option_list)
     product_obj.save()
     data = dict()
     data['is_created'] = True
     return data
-
 @csrf_exempt
 def brandUpdate(request):
     json_req = JSONParser().parse(request)
@@ -4730,23 +4020,16 @@ def brandUpdate(request):
     data = dict()
     data['is_updated'] = True
     return data
-
 from django.core.cache import cache
 import time
-
 def obtainVarientOptions(request):
     print('request', obtainVarientOptions)
     start_time = time.time()
-    
     category_id = request.GET.get("id")
     client_id = get_current_client()
-    
-    # Build match condition
     match_condition = {'category_id': {'$ne': 'all'}}
     if category_id:
         match_condition['category_id'] = category_id
-    
-    # Optimized aggregation pipeline
     pipeline = [
         {'$match': match_condition},
         {
@@ -4780,7 +4063,6 @@ def obtainVarientOptions(request):
                 'as': 'type_value'
             }
         },
-        {'$unwind': {'path': '$type_value', 'preserveNullAndEmptyArrays': True}},
         {
             '$group': {
                     "_id": "$varient_option._id",
@@ -4807,58 +4089,34 @@ def obtainVarientOptions(request):
             }
         }
     ]
-    
     try:
-        # Execute with timeout
         result = list(category_varient.objects.aggregate(pipeline, allowDiskUse=True))
-        
         data = {'category_varient_id': "", 'varient_list': []}
-        
         if result:
-            # BATCH FETCH category names to avoid N+1 queries
-            if not category_id:  # Only needed when no specific category filter
+            if not category_id:  
                 category_names_map = fetch_category_names_batch(result)
             else:
                 category_names_map = {}
-            
             processed_results = []
             for i in result:
-                
-                # Add category name if available
                 if not category_id and 'category_id' in i:
                     category_name = category_names_map.get(str(i['category_id']))
                     if category_name:
                         i['type_name'] = f"{i.get('type_name', '')} ({category_name})"
-                
-                # Clean up and convert IDs
-                
-                
-                # Process option values
-                # option_values = i.get('option_value_list', [])
-                # for j in option_values:
-                #     j['type_value_id'] = str(j.get('type_value_id', ''))
-                
                 processed_results.append(i)
-            
             data['varient_list'] = processed_results
-        
         execution_time = time.time() - start_time
         print(f"obtainVarientOptions executed in {execution_time:.2f} seconds")
-        
         return data
-        
     except Exception as e:
         print(f"Error in obtainVarientOptions: {str(e)}")
         return {'category_varient_id': "", 'varient_list': []}
-
-
 def fetch_category_names_batch(result_items):
     """Batch fetch category names to avoid N+1 queries"""
     category_ids = set()
     for item in result_items:
         if 'category_id' in item:
             category_ids.add(item['category_id'])
-    
     category_names_map = {}
     collections = [
         (category, 'category'),
@@ -4868,19 +4126,15 @@ def fetch_category_names_batch(result_items):
         (level_two_category, 'level_two'),
         (level_one_category, 'level_one')
     ]
-    
     for collection, coll_name in collections:
         try:
-            # Batch query all categories at once
             category_objs = collection.objects(id__in=list(category_ids))
             for cat in category_objs:
                 category_names_map[str(cat.id)] = getattr(cat, 'name', 'Unknown')
         except Exception as e:
             print(f"Error fetching from {coll_name}: {e}")
             continue
-    
     return category_names_map
-
 @csrf_exempt
 def updateCategoryToProducts(request):
     payload = json.loads(request.body)
@@ -4889,17 +4143,13 @@ def updateCategoryToProducts(request):
     category_level = payload.get('category_level')
     if not product_ids or not category_id:
         return JsonResponse({'error': 'Missing product_ids or new_category_name'}, status=400)
-    
     obj_product_ids = []
     for pid in product_ids:
         obj_product_ids.append(ObjectId(pid))
-
     updated_count = product_category_config.objects(product_id__in=obj_product_ids).update(
         category_id=category_id,
         category_level= category_level
     )
-
-    
     return JsonResponse({
             "status": True,
             "emessage": f"Category updated for {updated_count} products",
