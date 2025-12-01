@@ -574,6 +574,7 @@ def obtainCategoryAndSections(request):
 
 
 @csrf_exempt
+@cache_page(3600)
 def obtainAllProductList(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     print("USER_LGOIN_ID",user_login_id)
