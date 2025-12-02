@@ -4218,6 +4218,12 @@ def obtainVarientOptions(request):
             }
         },
         {
+            "$unwind":{
+                'path':'$type_value',
+                'preserveNullAndEmptyArrays':True
+            }
+        }
+        {
             '$group': {
                     "_id": "$varient_option._id",
                     "type_name": {"$first": "$type_name.name"},
