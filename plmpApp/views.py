@@ -70,16 +70,19 @@ from django.core.cache import cache
 from django.http import JsonResponse
 import hashlib
 import json
-
-
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import redirect
+from .quickbooks_service import QuickBooksService
+import json
+import logging
+logger = logging.getLogger(__name__)
 def v1(request):
     u_o = DatabaseModel.get_document(user.objects).name
     db = get_db()
     db_name = db.name
     print(db_name)
     return JsonResponse({"PLMP_API": u_o}, safe=False)
-
-
 def create_user(request):
     json_request = json.loads(request.body)
     categories_data = json_request.get('categories')
@@ -89,8 +92,6 @@ def create_user(request):
             category_obj = category(name=name, section_list=[])
             category_obj.save()
     return JsonResponse({'status': 'User created'})
-
-
 @csrf_exempt
 def createCategory(request):
     client_id = get_current_client()
@@ -110,8 +111,6 @@ def createCategory(request):
     logForCategory(category_obj.id, "Created", user_login_id, 'level-1', {})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory1(request):
     client_id = get_current_client()
@@ -150,8 +149,6 @@ def createCategory1(request):
                    user_login_id, 'level-2', {})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory2(request):
     client_id = get_current_client()
@@ -190,8 +187,6 @@ def createCategory2(request):
                    user_login_id, 'level-3', {})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory3(request):
     client_id = get_current_client()
@@ -230,8 +225,6 @@ def createCategory3(request):
                    user_login_id, 'level-4', {})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory4(request):
     client_id = get_current_client()
@@ -270,8 +263,6 @@ def createCategory4(request):
                    user_login_id, 'level-5', {})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createCategory5(request):
     client_id = get_current_client()
@@ -310,8 +301,6 @@ def createCategory5(request):
                    user_login_id, 'level-6', {})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createProduct(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
@@ -382,8 +371,6 @@ def createProduct(request):
     data = dict()
     data['status'] = True
     return data
-
-
 @csrf_exempt
 def deleteCategory(request):
     json_req = JSONParser().parse(request)
@@ -479,8 +466,6 @@ def deleteCategory(request):
     data = dict()
     data['is_deleted'] = True
     return data
-
-
 @csrf_exempt
 def updateCategory(request):
     json_req = JSONParser().parse(request)
@@ -508,8 +493,6 @@ def updateCategory(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 def convert_object_ids_to_strings(data):
     if isinstance(data, list):
         for item in data:
@@ -520,8 +503,6 @@ def convert_object_ids_to_strings(data):
                 data[key] = str(value)
             else:
                 convert_object_ids_to_strings(value)
-
-
 def obtainCategoryAndSections(request):
     client_id = get_current_client()
     pipeline = [
@@ -684,8 +665,6 @@ def obtainCategoryAndSections(request):
     data['category_list'] = result
     data['category_count'] = len(result)
     return data
-
-
 @csrf_exempt
 def obtainAllProductList(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
@@ -926,8 +905,6 @@ def obtainAllProductList(request):
         getCategoryLevelOrder(j)
     data['product_list'] = result_
     return data
-
-
 @csrf_exempt
 def obtainProductDetails(request):
     json_req = JSONParser().parse(request)
@@ -1039,8 +1016,6 @@ def obtainProductDetails(request):
         getCategoryLevelOrder(i)
         result['category_level'] = i['category_name']
     return result
-
-
 def productBulkUpdate(request):
     json_req = JSONParser().parse(request)
     product_obj_list = json_req['product_obj_list']
@@ -1050,8 +1025,6 @@ def productBulkUpdate(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 @csrf_exempt
 def productUpdate(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
@@ -1072,8 +1045,6 @@ def productUpdate(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 @csrf_exempt
 def varientUpdate(request):
     json_req = JSONParser().parse(request)
@@ -1102,8 +1073,6 @@ def varientUpdate(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 @csrf_exempt
 def obtainAllVarientList(request):
     json_req = JSONParser().parse(request)
@@ -1244,8 +1213,6 @@ def obtainAllVarientList(request):
             if 'type_value_id' in option:
                 option['type_value_id'] = str(option['type_value_id'])
     return result
-
-
 @csrf_exempt
 def exportAll(request):
     category_id = request.GET.get('category_id')
@@ -1447,7 +1414,6 @@ def exportAll(request):
     headers.extend(["Variant SKU", "Variant Grams", "Variant Inventory Tracker", "Variant Inventory Qty", "Variant Inventory Policy", "Variant Fulfillment Service", "Variant Price", "Variant Compare At Price", "Variant Requires Shipping", "Variant Taxable", "Variant Barcode", "Image Src", "Image Position", "Image Alt Text", "Gift Card", "SEO Title", "SEO Description", "Google Shopping / Google Product Category", "Google Shopping / Gender", "Google Shopping / Age Group", "Google Shopping / MPN", "Google Shopping / Condition", "Google Shopping / Custom Product", "Google Shopping / Custom Label 0", "Google Shopping / Custom Label 1", "Google Shopping / Custom Label 2", "Google Shopping / Custom Label 3", "Google Shopping / Custom Label 4", "Complimentary Product Text (product.metafields.custom.complimentary_product_text)", "Custom Additions (product.metafields.custom.custom_additions)", "Details as Shown (product.metafields.custom.details_as_shown1)", "Dimensions (product.metafields.custom.dimensions1)", "Key Features (product.metafields.custom.key_features1)", "Options (product.metafields.custom.options1)", "Quickship or Regular (product.metafields.custom.quickship_or_regular)",
                    "Quickship or Regular Product (product.metafields.custom.quickship_or_regular_product)", "Google: Custom Product (product.metafields.mm-google-shopping.custom_product)", "Bed/Frame features (product.metafields.shopify.bed-frame-features)", "Color (product.metafields.shopify.color-pattern)", "Frame color (product.metafields.shopify.frame-color)", "Furniture/Fixture features (product.metafields.shopify.furniture-fixture-features)", "Furniture/Fixture material (product.metafields.shopify.furniture-fixture-material)", "Seat structure (product.metafields.shopify.seat-structure)", "Tabletop shape (product.metafields.shopify.tabletop-shape)", "Upholstery material (product.metafields.shopify.upholstery-material)", "Complementary products (product.metafields.shopify--discovery--product_recommendation.complementary_products)", "Related products (product.metafields.shopify--discovery--product_recommendation.related_products)", "Related products settings (product.metafields.shopify--discovery--product_recommendation.related_products_display", "Variant Image", "Variant Weight Unit", "Variant Tax Code", "Cost per item", "Included / United States", "Price / United States", "Compare At Price / United States", "Status"])
     worksheet.append(headers)
-
     def generate_shopify_handle(product_name):
         name = product_name.lower()
         name = re.sub(r'[^a-z0-9\s-]', '', name)
@@ -1548,8 +1514,6 @@ def exportAll(request):
     print("FIRST 500 BYTES:", response.content[:500])
     print("HAS EXCEL MAGIC BYTES?", response.content.startswith(b'PK'))
     return response
-
-
 @csrf_exempt
 def retrieveData(request):
     data = dict()
@@ -1581,8 +1545,6 @@ def retrieveData(request):
             return data
     except Exception as e:
         return data
-
-
 @csrf_exempt
 def obtainVarientForCategory(request):
     category_id = request.GET.get("id")
@@ -1687,8 +1649,6 @@ def obtainVarientForCategory(request):
                 i['option_value_list'] = []
     data['varient_list'] = result
     return data
-
-
 @csrf_exempt
 def createVarientOption(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
@@ -1743,8 +1703,6 @@ def createVarientOption(request):
     data = dict()
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def createValueForVarientName(request):
     json_req = JSONParser().parse(request)
@@ -1770,12 +1728,7 @@ def createValueForVarientName(request):
                                        'add_to_set__option_value_id_list': type_value_id})
         data['is_created'] = True
     return data
-
-
 def traverse_categories(category, result_list):
-    """
-    Recursively traverse categories and add their IDs and names to the result list.
-    """
     if hasattr(category, 'level_five_category_list') and category.level_five_category_list:
         for sub_category in category.level_five_category_list:
             traverse_categories(sub_category, result_list)
@@ -1793,8 +1746,6 @@ def traverse_categories(category, result_list):
             traverse_categories(sub_category, result_list)
     else:
         result_list.append({'id': category.id, 'name': category.name})
-
-
 def obtainDashboardCount(request):
     client_id = get_current_client()
     if not client_id:
@@ -1909,8 +1860,6 @@ def obtainDashboardCount(request):
             'parent_level_category_list': [],
             'varent_list': []
         }
-
-
 @csrf_exempt
 def swapProductToCategory(request):
     json_req = JSONParser().parse(request)
@@ -1938,8 +1887,6 @@ def swapProductToCategory(request):
                                      'category_id': category_id, 'varient_option_id_list': varient_option_id_list, "category_level": category_name})
     data['is_update'] = True
     return data
-
-
 @csrf_exempt
 def createAndAddVarient(request):
     data = dict()
@@ -1971,36 +1918,26 @@ def createAndAddVarient(request):
         return data
     data['status'] = True
     return data
-
-
 def logForCategory(category_id, action, user_id, level, dict_datas):
     DatabaseModel.save_documents(category_log, {"category_id": str(category_id), "action": str(
         action), "user_id": ObjectId(user_id), 'level': level, 'data': dict_datas})
     return 1
-
-
 def obtainlogForCategoryVarientOption(category_id, category_varient_option_id, action, user_id, category_level, dict_datas):
     DatabaseModel.save_documents(category_varient_option_log, {"category_id": str(category_id), "category_varient_option_id": ObjectId(
         category_varient_option_id), "user_id": ObjectId(user_id), 'action': action, 'level': category_level, 'data': dict_datas})
     return 1
-
-
 def logForCreateProduct(product_id, user_id, action, dict_datas):
     if not isinstance(dict_datas, dict) or dict_datas is None:
         dict_datas = {}
     DatabaseModel.save_documents(product_log, {"product_id": ObjectId(
         product_id), "user_id": ObjectId(user_id), 'action': action, 'data': dict_datas})
     return 1
-
-
 def logForCreateProductVarient(product_varient_id, user_id, action, dict_datas):
     if not isinstance(dict_datas, dict) or dict_datas is None:
         dict_datas = {}
     DatabaseModel.save_documents(product_varient_log, {"product_varient_id": ObjectId(
         product_varient_id), "user_id": ObjectId(user_id), 'action': action, 'data': dict_datas})
     return 1
-
-
 @csrf_exempt
 def obtainCategoryLog(request):
     try:
@@ -2070,8 +2007,6 @@ def obtainCategoryLog(request):
     except Exception as e:
         print(f"Error in obtainCategoryLog: {str(e)}")
         return {'result': [], 'error': str(e)}
-
-
 @csrf_exempt
 def obtainCategoryVarientLog(request):
     client_id = get_current_client()
@@ -2156,8 +2091,6 @@ def obtainCategoryVarientLog(request):
             data['result'], key=lambda x: x['log_date'], reverse=True)
         return data
     return data
-
-
 @csrf_exempt
 def obtainProductLog(request):
     json_req = json.loads(request.body.decode("utf-8")) if request.body else {}
@@ -2227,15 +2160,11 @@ def obtainProductLog(request):
             data['result'], key=lambda x: x['log_date'], reverse=True)
         return data
     return data
-
-
 def convert_to_timezone(dt, tz_name):
     target_tz = timezone(tz_name)
     if is_naive(dt):
         dt = make_aware(dt)
     return dt.astimezone(target_tz)
-
-
 @csrf_exempt
 def obtainProductVarientLog(request):
     json_req = json.loads(request.body.decode("utf-8")) if request.body else {}
@@ -2319,8 +2248,6 @@ def obtainProductVarientLog(request):
             data['result'], key=lambda x: x['log_date'], reverse=True)
         return data
     return data
-
-
 @csrf_exempt
 def createBrand(request):
     name = request.POST.get('name')
@@ -2360,8 +2287,6 @@ def createBrand(request):
                                                  'city': city, 'state': state, 'zip_code': zip, 'address': address, 'website': website, 'number_of_feeds': number_of_feeds})
     data['is_created'] = True
     return data
-
-
 def obtainBrand(request):
     client_id = get_current_client()
     brand_id = request.GET.get('id')
@@ -2431,12 +2356,8 @@ def obtainBrand(request):
         'brand_list': result,
         'brand_count': len(result)
     }
-
-
 logger = logging.getLogger(__name__)
 logger = logging.getLogger(__name__)
-
-
 @csrf_exempt
 def upload_file(request):
     logger.info("upload_file function called")
@@ -2585,11 +2506,7 @@ def upload_file(request):
     logger.info(
         f"upload_file completed successfully. Extracted {len(filtered_keys)} columns")
     return data
-
-
 logger = logging.getLogger(__name__)
-
-
 @csrf_exempt
 def saveXlData(request):
     logger.info("saveXlData function called")
@@ -3274,8 +3191,6 @@ def saveXlData(request):
     logger.info(f"Processed {len(bulk_logs)} category logs")
     data['status'] = True
     return data
-
-
 def obtainPriceLog(request):
     try:
         client_id = get_current_client()
@@ -3323,12 +3238,8 @@ def obtainPriceLog(request):
         return result_list
     except Exception as e:
         print(f"Error in obtainPriceLog: {str(e)}")
-
-
 def data_fn():
     return data_list_file
-
-
 @csrf_exempt
 def createClient(request):
     json_req = JSONParser().parse(request)
@@ -3346,8 +3257,6 @@ def createClient(request):
             client, {'name': name, 'logo': logo, 'location': location})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def obtainClient(request):
     data = dict()
@@ -3366,15 +3275,11 @@ def obtainClient(request):
             client_ins['id'] = str(client_ins['id'])
         data['client_list'] = client_list[0]['client_list']
     return data
-
-
 def obtainSuperAdminDashboard(request):
     data = dict()
     data['clients_count'] = DatabaseModel.count_documents(client.objects, {})
     data['active_users_count'] = 0
     return data
-
-
 @csrf_exempt
 def obtainClientDetail(request):
     client_id = request.GET.get("id")
@@ -3414,8 +3319,6 @@ def obtainClientDetail(request):
         client_list['id'] = str(client_list['id'])
         data['client_obj'] = client_list
     return data
-
-
 @csrf_exempt
 def addUserAndRoleForClient(request):
     json_req = JSONParser().parse(request)
@@ -3431,8 +3334,6 @@ def addUserAndRoleForClient(request):
     else:
         DatabaseModel.save_documents(
             user, {'name': user_obj['name'], 'email': user_obj['email'], 'role': user_obj['role'], 'client_id': ObjectId(user_obj['id'])})
-
-
 @csrf_exempt
 def categoryLevelForChildCategory(request):
     json_req = JSONParser().parse(request)
@@ -3442,8 +3343,6 @@ def categoryLevelForChildCategory(request):
     dist_i['category_name'] = ""
     getCategoryLevelOrder(dist_i)
     return dist_i
-
-
 def obtainClientName(request):
     client_id = get_current_client()
     client_obj = DatabaseModel.get_document(client.objects, {'id': client_id})
@@ -3454,21 +3353,15 @@ def obtainClientName(request):
         data['name'] = client_obj.name
         data['logo'] = client_obj.logo
     return data
-
 def obtainAllLastLevelIds(request):
     try:
         client_id = get_current_client()
-        
         if not client_id:
             return {'error': 'Client not found', 'last_level_category': []}
-        
         last_all_ids = []
-        
-        # Fetch categories with select_related to avoid N+1 queries
         category_list = category.objects(
             client_id=ObjectId(client_id)
         ).select_related(max_depth=5)
-        
         for category_obj in category_list:
             if len(category_obj.level_one_category_list) > 0:
                 for i in category_obj.level_one_category_list:
@@ -3496,29 +3389,20 @@ def obtainAllLastLevelIds(request):
             else:
                 last_all_ids.append(
                     {'id': str(category_obj.id), 'name': category_obj.name})
-        
-        # Batch fetch brand_id for each category
         category_ids = [item['id'] for item in last_all_ids]
-        
         product_configs = product_category_config.objects(
             category_id__in=category_ids
         ).only('category_id', 'product_id').no_dereference()
-        
         cat_product_map = {}
         for pc in product_configs:
             if pc.product_id:
                 pid = pc.product_id.id if hasattr(pc.product_id, 'id') else pc.product_id
                 cat_product_map[pc.category_id] = pid
-
         products_ids = list(set(pid for pid in cat_product_map.values() if pid))
-        
-        # Remove duplicates with set()
         products_ids = list(set(pid for pid in cat_product_map.values() if pid))
-        
         products_list = products.objects(
             id__in=products_ids
         ).only('id', 'brand_id').no_dereference()
-        
         product_brand_map = {}
         for p in products_list:
             if p.brand_id:
@@ -3527,22 +3411,15 @@ def obtainAllLastLevelIds(request):
                 else:
                     bid = str(p.brand_id)
                 product_brand_map[str(p.id)] = bid
-
-        
-        # Add brand_id to each category
         for item in last_all_ids:
             prod_id = cat_product_map.get(item['id'])
             item['brand_id'] = product_brand_map.get(str(prod_id)) if prod_id else None
-        
         data = dict()
         data['last_level_category'] = last_all_ids
         return data
-    
     except Exception as e:
         logger.exception(f"Error in obtainAllLastLevelIds: {e}")
         return {'error': 'An error occurred', 'last_level_category': []}
-
-
 @csrf_exempt
 def obtainBrandCategoryWisePrice(request):
     json_req = JSONParser().parse(request)
@@ -3553,8 +3430,6 @@ def obtainBrandCategoryWisePrice(request):
     for i in brand_category_price_obj_list:
         data['price_list'].append(i.price)
     return data
-
-
 def createBrandCategoryWisePrice(json_req):
     brand_category_price_obj_1 = DatabaseModel.list_documents(brand_category_price.objects, {
                                                               'category_id__in': json_req['category_id_list'], 'brand_id': ObjectId(json_req['brand_id'])})
@@ -3579,8 +3454,6 @@ def createBrandCategoryWisePrice(json_req):
     data = dict()
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def updateRetailPrice(request):
     json_req = JSONParser().parse(request)
@@ -3619,8 +3492,6 @@ def updateRetailPrice(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 @csrf_exempt
 def obtainBrandCategoryWisePriceTable(request):
     json_req = JSONParser().parse(request)
@@ -3659,14 +3530,10 @@ def obtainBrandCategoryWisePriceTable(request):
     data['category_list'] = sorted(data['category_list'], key=lambda x: ObjectId(
         x['brand_category_price_id']), reverse=True)
     return data
-
-
 def createradial_price_log(product_varient_id, old_retail_price, new_retail_price, user_login_id, client_id):
     DatabaseModel.save_documents(radial_price_log, {"product_varient_id": product_varient_id, 'old_retail_price': old_retail_price,
                                  'new_retail_price': new_retail_price, 'user_id': ObjectId(user_login_id), 'client_id': ObjectId(client_id)})
     return 1
-
-
 @csrf_exempt
 def updateActiveRetailPrice(request):
     json_req = JSONParser().parse(request)
@@ -3677,8 +3544,6 @@ def updateActiveRetailPrice(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 @csrf_exempt
 def obtainRetailBrandPrice(request):
     json_req = JSONParser().parse(request)
@@ -3692,8 +3557,6 @@ def obtainRetailBrandPrice(request):
         data['price'] = 1
         data['price_option'] = "finished_price"
     return data
-
-
 @csrf_exempt
 def createUser(request):
     client_id = get_current_client()
@@ -3716,8 +3579,6 @@ def createUser(request):
     )
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def obtainVarientOptionForRetailPrice(request):
     try:
@@ -3830,8 +3691,6 @@ def obtainVarientOptionForRetailPrice(request):
             'error': 'An error occurred processing the request',
             'varient_option_list': []
         }
-
-
 @csrf_exempt
 def obtainVarientOptionValueForRetailPrice(request):
     data = dict()
@@ -3849,8 +3708,6 @@ def obtainVarientOptionValueForRetailPrice(request):
                     {'id': str(i.id), "name": i.name})
                 unique_ids.add(option_id)
     return data
-
-
 @csrf_exempt
 def obtainProductBasedOnVarientOption(request):
     json_req = JSONParser().parse(request)
@@ -4035,8 +3892,6 @@ def obtainProductBasedOnVarientOption(request):
     data['result'] = result
     data['product_count'] = len(set(product_set))
     return data
-
-
 @csrf_exempt
 def saveChangesForVarientOption(request):
     json_req = JSONParser().parse(request)
@@ -4057,8 +3912,6 @@ def saveChangesForVarientOption(request):
         product_varient_obj.retail_price = str(i['retail_price'])
         product_varient_obj.save()
     return data
-
-
 @csrf_exempt
 def obtainRevertPreviousAndCurrentPriceForCategory(request):
     json_req = JSONParser().parse(request)
@@ -4077,8 +3930,6 @@ def obtainRevertPreviousAndCurrentPriceForCategory(request):
         data['current_price'] = brand_category_price_list[0].price
         data['old_price'] = "0"
     return data
-
-
 @csrf_exempt
 def obtainRevertPreviousAndCurrentPriceForVarientOption(request):
     json_req = JSONParser().parse(request)
@@ -4099,8 +3950,6 @@ def obtainRevertPreviousAndCurrentPriceForVarientOption(request):
         data['current_price'] = revert_varient_retail_price_obj[0].current_price
         data['old_price'] = "0"
     return data
-
-
 @csrf_exempt
 def updateRevertPriceForCategory(request):
     json_req = JSONParser().parse(request)
@@ -4190,8 +4039,6 @@ def updateRevertPriceForCategory(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 @csrf_exempt
 def updateRevertPriceForVarientOption(request):
     json_req = JSONParser().parse(request)
@@ -4360,8 +4207,6 @@ def updateRevertPriceForVarientOption(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 def obtainUserBasedOnClient(request):
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     client_id = get_current_client()
@@ -4373,8 +4218,6 @@ def obtainUserBasedOnClient(request):
         data['user_list'].append({'id': str(i['id']), 'name': i['name'], 'role': i['role'],
                                  'is_active': i['is_active'] if 'is_active' in i else False})
     return data
-
-
 @csrf_exempt
 def UpdateProductActiveInActive(request):
     try:
@@ -4391,8 +4234,6 @@ def UpdateProductActiveInActive(request):
         return {'is_update': True}
     except Exception as e:
         print(f" Error occured while updating product status", {e})
-
-
 @csrf_exempt
 def UpdateVarientActiveInActive(request):
     json_req = JSONParser().parse(request)
@@ -4404,8 +4245,6 @@ def UpdateVarientActiveInActive(request):
     data = dict()
     data['is_update'] = True
     return data
-
-
 @csrf_exempt
 def obtainInActiveProducts(request):
     client_id = get_current_client()
@@ -4491,20 +4330,14 @@ def obtainInActiveProducts(request):
     data['product_list'] = result
     data['product_count'] = len(result)
     return data
-
-
 @lru_cache(maxsize=1024)
 def get_root_category_name(level_one_id):
-    """Safely get root category name with caching"""
     root = DatabaseModel.get_document(
         category.objects,
         {'level_one_category_list__in': [ObjectId(level_one_id)]}
     )
     return root.name if root else "Unknown Category"
-
-
 def build_breadcrumb(category_id, level):
-    """Build full breadcrumb safely and efficiently"""
     breadcrumb = []
     level_config = {
         'level-1': (category, None, None),
@@ -4542,8 +4375,6 @@ def build_breadcrumb(category_id, level):
     full_path = " > ".join(breadcrumb + [current_name])
     last_name = current_name
     return full_path, last_name, category_number
-
-
 def obtainListofCategoryCombinations(request):
     client_id = get_current_client()
     if not client_id:
@@ -4583,8 +4414,6 @@ def obtainListofCategoryCombinations(request):
             'category_level_str': item['level']
         })
     return {'last_all_ids': result}
-
-
 @csrf_exempt
 def updatevarientToReleatedCategories(request):
     json_req = JSONParser().parse(request)
@@ -4623,8 +4452,6 @@ def updatevarientToReleatedCategories(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 @csrf_exempt
 def updateTaxonomyForProduct(request):
     json_req = JSONParser().parse(request)
@@ -4632,8 +4459,6 @@ def updateTaxonomyForProduct(request):
     DatabaseModel.update_documents(product_category_config.objects, {'product_id': json_req['product_id']}, {
                                    'category_id': json_req['category_id'], 'category_level': json_req['category_level']})
     return data
-
-
 @csrf_exempt
 def cloneProduct(request):
     json_req = JSONParser().parse(request)
@@ -4669,8 +4494,6 @@ def cloneProduct(request):
     logForCreateProduct(product_id, user_login_id, "clone", {})
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def cloneVarient(request):
     json_req = JSONParser().parse(request)
@@ -4697,8 +4520,6 @@ def cloneVarient(request):
     data = dict()
     data['is_created'] = True
     return data
-
-
 @csrf_exempt
 def brandUpdate(request):
     json_req = JSONParser().parse(request)
@@ -4710,8 +4531,6 @@ def brandUpdate(request):
     data = dict()
     data['is_updated'] = True
     return data
-
-
 def obtainVarientOptions(request):
     print('request', obtainVarientOptions)
     start_time = time.time()
@@ -4809,10 +4628,7 @@ def obtainVarientOptions(request):
     except Exception as e:
         print(f"Error in obtainVarientOptions: {str(e)}")
         return {'category_varient_id': "", 'varient_list': []}
-
-
 def fetch_category_names_batch(result_items):
-    """Batch fetch category names to avoid N+1 queries"""
     category_ids = set()
     for item in result_items:
         if 'category_id' in item:
@@ -4836,8 +4652,6 @@ def fetch_category_names_batch(result_items):
             print(f"Error fetching from {coll_name}: {e}")
             continue
     return category_names_map
-
-
 @csrf_exempt
 def updateCategoryToProducts(request):
     payload = json.loads(request.body)
@@ -4858,3 +4672,223 @@ def updateCategoryToProducts(request):
         "emessage": f"Category updated for {updated_count} products",
         "updated_count": updated_count
     })
+@csrf_exempt
+def quickbooks_connect(request):
+    try:
+        qb_service = QuickBooksService()
+        auth_url = qb_service.get_authorization_url()
+        return {
+            'estatus': True,
+            'data': {'auth_url': auth_url}
+        }
+    except Exception as e:
+        return {
+            'estatus': False,
+            'emessage': str(e)
+        }
+@csrf_exempt
+def quickbooks_callback(request):
+    try:
+        auth_code = request.GET.get('code')
+        realm_id = request.GET.get('realmId')
+        error = request.GET.get('error')
+        if error:
+            return JsonResponse({'estatus': False, 'emessage': f"Authorization failed: {error}"})
+        if not auth_code or not realm_id:
+            return JsonResponse({'estatus': False, 'emessage': 'Missing code or realm ID'})
+        qb_service = QuickBooksService()
+        result = qb_service.handle_callback(auth_code, realm_id)
+        if result['success']:
+            return redirect(f"/Admin/quickbooks/success?realm_id={realm_id}")
+        else:
+            return JsonResponse({'estatus': False, 'emessage': result['error']})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_disconnect(request):
+    try:
+        data = json.loads(request.body)
+        realm_id = data.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.disconnect(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_status(request):
+    try:
+        qb_service = QuickBooksService()
+        result = qb_service.get_connection_status()
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': 'success'})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_customers(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_all_customers(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_customer_details(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        customer_id = request.GET.get('customer_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_customer_details(realm_id, customer_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_create_customer(request):
+    try:
+        data = json.loads(request.body)
+        realm_id = data.get('realm_id')
+        customer_data = data.get('customer')
+        qb_service = QuickBooksService()
+        result = qb_service.create_customer(realm_id, customer_data)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_invoices(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_all_invoices(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_create_invoice(request):
+    try:
+        data = json.loads(request.body)
+        realm_id = data.get('realm_id')
+        invoice_data = data.get('invoice')
+        qb_service = QuickBooksService()
+        result = qb_service.create_invoice(realm_id, invoice_data)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_payments(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_all_payments(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_vendors(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_all_vendors(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_vendor_details(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        vendor_id = request.GET.get('vendor_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_vendor_details(realm_id, vendor_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_create_vendor(request):
+    try:
+        data = json.loads(request.body)
+        realm_id = data.get('realm_id')
+        vendor_data = data.get('vendor')
+        qb_service = QuickBooksService()
+        result = qb_service.create_vendor(realm_id, vendor_data)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_bills(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_all_bills(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_purchase_orders(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_all_purchase_orders(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_items(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_all_items(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_inventory_report(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_inventory_report(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_create_item(request):
+    try:
+        data = json.loads(request.body)
+        realm_id = data.get('realm_id')
+        item_data = data.get('item')
+        qb_service = QuickBooksService()
+        result = qb_service.create_item(realm_id, item_data)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_update_item_quantity(request):
+    try:
+        data = json.loads(request.body)
+        realm_id = data.get('realm_id')
+        item_id = data.get('item_id')
+        quantity = data.get('quantity')
+        adjustment_type = data.get('adjustment_type', 'set')
+        qb_service = QuickBooksService()
+        result = qb_service.update_item_quantity(realm_id, item_id, quantity, adjustment_type)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_sync_products(request):
+    try:
+        data = json.loads(request.body)
+        realm_id = data.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.sync_products_to_quickbooks(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_chart_of_accounts(request):
+    try:
+        realm_id = request.GET.get('realm_id')
+        qb_service = QuickBooksService()
+        result = qb_service.get_chart_of_accounts(realm_id)
+        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+    except Exception as e:
+        return JsonResponse({'estatus': False, 'emessage': str(e)})
+    
+    

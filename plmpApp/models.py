@@ -526,3 +526,24 @@ class revert_varient_retail_price(Document):
     price_option = fields.StringField()
     price_adding_sympol = fields.StringField()
     
+class QuickBooksToken(Document):
+    access_token=fields.StringField()
+    refresh_token=fields.StringField()
+    realm_id=fields.StringField()
+    token_type=fields.StringField(default='Bearer')
+    expires_at=fields.DateTimeField()
+    refresh_token_expires_at=fields.DateTimeField()
+    client_id=fields.ReferenceField(client)
+    is_active=fields.BooleanField()
+    created_at=fields.DateTimeField(default=datetime.utcnow)
+    updated_at=fields.DateTimeField(default=datetime.utcnow)
+    
+    def is_token_expired(self):
+        from datetime import datetime
+        return datetime.utcnow()>=self.expires_at
+    def is_refresh_token_expired(self):
+        from datetime import datetime
+        return datetime.utcnow() >= self.refresh_token_expires_at
+    def save(self,*args,**kwargs):
+        self.updated_at=datetime.utcnow()
+        return super(QuickBooksToken,self).save(*args,**kwargs)

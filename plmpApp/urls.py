@@ -1,8 +1,7 @@
-
-from django.urls import path  # type: ignore
+from django.urls import path  
 from .views import v1, create_user,createCategory,createCategory1, createCategory2,createCategory3,createCategory4,createCategory5,createProduct,deleteCategory, updateCategory,obtainCategoryAndSections, obtainAllProductList, upload_file, obtainProductDetails, productBulkUpdate, productUpdate, obtainAllVarientList, exportAll, retrieveData, varientUpdate ,obtainVarientForCategory,createVarientOption,createValueForVarientName,obtainDashboardCount,createUser,createAndAddVarient,swapProductToCategory,obtainCategoryLog,obtainCategoryVarientLog,obtainProductLog,obtainProductVarientLog,createBrand,obtainBrand ,saveXlData,obtainPriceLog,obtainClient,createClient,obtainSuperAdminDashboard,obtainClientDetail,addUserAndRoleForClient, categoryLevelForChildCategory, obtainClientName,obtainAllLastLevelIds, obtainBrandCategoryWisePrice,obtainBrandCategoryWisePriceTable,updateRetailPrice, updateActiveRetailPrice, obtainRetailBrandPrice, obtainVarientOptionForRetailPrice, obtainVarientOptionValueForRetailPrice,obtainProductBasedOnVarientOption,saveChangesForVarientOption,obtainRevertPreviousAndCurrentPriceForCategory,obtainRevertPreviousAndCurrentPriceForVarientOption,updateRevertPriceForCategory,updateRevertPriceForVarientOption, obtainUserBasedOnClient,UpdateProductActiveInActive,UpdateVarientActiveInActive,obtainInActiveProducts,obtainListofCategoryCombinations,updatevarientToReleatedCategories,updateTaxonomyForProduct,cloneProduct,cloneVarient,brandUpdate,obtainVarientOptions,updateCategoryToProducts
 from .authentication import loginUser,sendOtp,resetPassword
-
+from plmpApp.views import quickbooks_callback, quickbooks_connect, quickbooks_create_customer, quickbooks_create_invoice, quickbooks_create_item, quickbooks_create_vendor, quickbooks_disconnect, quickbooks_get_bills, quickbooks_get_chart_of_accounts, quickbooks_get_customer_details, quickbooks_get_customers, quickbooks_get_inventory_report, quickbooks_get_invoices, quickbooks_get_items, quickbooks_get_payments, quickbooks_get_purchase_orders, quickbooks_get_vendor_details, quickbooks_get_vendors, quickbooks_status, quickbooks_sync_products, quickbooks_update_item_quantity
 urlpatterns = [    
     path('v1/', v1, name='v1'), 
     path('list-users/', create_user, name='list_users'),
@@ -77,4 +76,25 @@ urlpatterns = [
     path('brandUpdate/', brandUpdate, name='brandUpdate'),
     path('obtainVarientOptions/', obtainVarientOptions, name='obtainVarientOptions'),
     path('updateCategoryToProducts/', updateCategoryToProducts, name='updateCategoryToProducts'),
+    path('quickbooks/connect/', quickbooks_connect,name='quickbooks_connect'),
+    path('quickbooks/callback/', quickbooks_callback,name='quickbooks_callback'),
+    path('quickbooks/disconnect/', quickbooks_disconnect,name='quickbooks_disconnect'),
+    path('quickbooks/status/', quickbooks_status,name='quickbooks_status'),
+    path('quickbooks/customers/', quickbooks_get_customers,name='quickbooks_get_customers'),
+    path('quickbooks/customers/details/', quickbooks_get_customer_details,name='quickbooks_get_customer_details'),
+    path('quickbooks/customers/create/', quickbooks_create_customer,name='quickbooks_create_customer'),
+    path('quickbooks/invoices/', quickbooks_get_invoices,name='quickbooks_get_invoices'),
+    path('quickbooks/invoices/create/', quickbooks_create_invoice,name='quickbooks_create_invoice'),
+    path('quickbooks/payments/', quickbooks_get_payments,name='quickbooks_get_payments'),
+    path('quickbooks/vendors/', quickbooks_get_vendors,name='quickbooks_get_vendors'),
+    path('quickbooks/vendors/details/', quickbooks_get_vendor_details,name='quickbooks_get_vendor_details'),
+    path('quickbooks/vendors/create/', quickbooks_create_vendor,name='quickbooks_create_vendor'),
+    path('quickbooks/bills/', quickbooks_get_bills,name='quickbooks_get_bills'),
+    path('quickbooks/purchase-orders/', quickbooks_get_purchase_orders,name='quickbooks_get_purchase_orders'),
+    path('quickbooks/items/', quickbooks_get_items,name='quickbooks_get_items'),
+    path('quickbooks/inventory-report/', quickbooks_get_inventory_report,name='quickbooks_get_inventory_report'),
+    path('quickbooks/items/create/', quickbooks_create_item,name='quickbooks_create_item'),
+    path('quickbooks/items/update-quantity/', quickbooks_update_item_quantity,name='quickbooks_update_item_quantity'),
+    path('quickbooks/sync-products/',quickbooks_sync_products,name='quickbooks_sync_products'),
+    path('quickbooks/chart-of-accounts/', quickbooks_get_chart_of_accounts,name='quickbooks_get_chart_of_accounts'),
 ]
