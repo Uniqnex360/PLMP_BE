@@ -4222,7 +4222,7 @@ def obtainVarientOptions(request):
                 'path':'$type_value',
                 'preserveNullAndEmptyArrays':True
             }
-        }
+        },
         {
             '$group': {
                     "_id": "$varient_option._id",
