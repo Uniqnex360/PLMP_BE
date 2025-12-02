@@ -3309,19 +3309,38 @@ def obtainVarientOptionForRetailPrice(request):
     try:
         data = {'varient_option_list': []}
         client_id = get_current_client()
+        
         if not client_id:
             logger.error("No client_id found in request")
             return {'error': 'Client not found', 'varient_option_list': []}
-        varient_option_list = list(DatabaseModel.list_documents(
-            varient_option.objects, 
-            {'client_id': ObjectId(client_id)}
-        ))
+
+        # 1. Fetch variant options with selected fields only (no dereferencing yet)
+        varient_option_list = list(
+            varient_option.objects(client_id=ObjectId(client_id))
+            .only('id', 'option_name_id', 'category_str')
+            .no_dereference()
+        )
+        
         if not varient_option_list:
             return data
-        category_ids = []
+
+        # 2. Collect all option_name_ids and category_ids in one pass
+        option_name_ids = set()
+        category_ids = set()
+        
         for variant in varient_option_list:
+            if variant.option_name_id:
+                option_name_ids.add(variant.option_name_id.id if hasattr(variant.option_name_id, 'id') else variant.option_name_id)
             if variant.category_str:
-                category_ids.append(variant.category_str)
+                category_ids.add(variant.category_str)
+
+        # 3. Batch fetch all type_names in ONE query
+        type_name_map = {}
+        if option_name_ids:
+            type_names = type_name.objects(id__in=list(option_name_ids)).only('id', 'name')
+            type_name_map = {str(tn.id): tn.name for tn in type_names}
+
+        # 4. Batch fetch categories from all collections
         category_map = {}
         collections = [
             (category, "category"),
@@ -3331,9 +3350,12 @@ def obtainVarientOptionForRetailPrice(request):
             (level_two_category, "level_two"),
             (level_one_category, "level_one")
         ]
+        
+        category_ids_list = list(category_ids)
+        
         for collection, level in collections:
             try:
-                categories = collection.objects(id__in=category_ids).only('id', 'name')
+                categories = collection.objects(id__in=category_ids_list).only('id', 'name')
                 for cat in categories:
                     category_map[str(cat.id)] = {
                         'name': cat.name,
@@ -3342,39 +3364,78 @@ def obtainVarientOptionForRetailPrice(request):
                     }
             except Exception as e:
                 logger.error(f"Error fetching {level} categories: {e}")
-        product_configs = list(product_category_config.objects(
-    category_id__in=list(category_map.keys())
-))
+
+        # 5. Batch fetch product_category_configs with select_related
         category_brand_map = {}
-        for pc in product_configs:
-            try:
-                if pc.product_id and pc.product_id.brand_id:
-                    category_brand_map[pc.category_id] = str(pc.product_id.brand_id.id)
-            except Exception as e:
-                logger.warning(f"Error processing product config: {e}")
-        seen_option_ids = set()
+        if category_map:
+            # Fetch product configs with product and brand in fewer queries
+            product_configs = list(
+                product_category_config.objects(category_id__in=list(category_map.keys()))
+                .only('category_id', 'product_id')
+                .no_dereference()
+            )
+            
+            # Collect all product_ids
+            product_ids = set()
+            config_product_map = {}  # category_id -> product_id
+            
+            for pc in product_configs:
+                if pc.product_id:
+                    pid = pc.product_id.id if hasattr(pc.product_id, 'id') else pc.product_id
+                    product_ids.add(pid)
+                    config_product_map[pc.category_id] = pid
+            
+            # Batch fetch products with brand_id
+            if product_ids:
+                products_list = products.objects(id__in=list(product_ids)).only('id', 'brand_id').no_dereference()
+                product_brand_map = {}
+                
+                for p in products_list:
+                    if p.brand_id:
+                        bid = p.brand_id.id if hasattr(p.brand_id, 'id') else p.brand_id
+                        product_brand_map[str(p.id)] = str(bid)
+                
+                # Build category -> brand map
+                for cat_id, prod_id in config_product_map.items():
+                    brand_id = product_brand_map.get(str(prod_id))
+                    if brand_id:
+                        category_brand_map[cat_id] = brand_id
+
+        # 6. Build response in single pass
         for variant in varient_option_list:
             try:
-                if not variant.option_name_id:
+                option_name_id = variant.option_name_id
+                if not option_name_id:
                     continue
-                option_id = str(variant.option_name_id.id)
-                seen_option_ids.add(option_id)
+                
+                # Get the actual ID
+                opt_id = str(option_name_id.id if hasattr(option_name_id, 'id') else option_name_id)
+                option_name = type_name_map.get(opt_id)
+                
+                if not option_name:
+                    continue
+
                 category_info = category_map.get(variant.category_str, {})
                 category_name = category_info.get('name')
                 category_id = category_info.get('id')
                 brand_id = category_brand_map.get(category_id)
-                display_name = variant.option_name_id.name
+
+                display_name = option_name
                 if category_name:
-                    display_name = f"{variant.option_name_id.name} ({category_name})"
+                    display_name = f"{option_name} ({category_name})"
+
                 data['varient_option_list'].append({
                     'id': str(variant.id),
                     'name': display_name,
                     'brand_id': brand_id
                 })
+                
             except Exception as e:
                 logger.error(f"Error processing variant option {variant.id}: {e}")
                 continue
+
         return data
+        
     except Exception as e:
         logger.exception(f"Error in obtainVarientOptionForRetailPrice: {e}")
         return {
