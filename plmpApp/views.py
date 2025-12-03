@@ -5183,5 +5183,29 @@ def quickbooks_get_chart_of_accounts(request):
         return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
     except Exception as e:
         return JsonResponse({'estatus': False, 'emessage': str(e)})
+@csrf_exempt
+def quickbooks_get_invoice_details(request):
+    try:
+        realm_id=request.GET.get('realm_id')
+        invoice_id=request.GET.get('invoice_id')
+        if not realm_id  or not invoice_id:
+            return JsonResponse({
+                'status':False,
+                'data':{},
+                'message':"Both realm_id and invoice_id are required!"
+            })
+        qb_service=QuickBooksService()
+        result=qb_service.get_invoice_details(realm_id,invoice_id)
+        return JsonResponse({
+            'status':result['success'],
+            'data':result,
+            'message':result.get('error','success')
+        })
+    except Exception as e:
+        logger.error(f"Error in quickbooks_get_invoice_details:{e}")
+        return JsonResponse({
+            'status':False,
+            'message':str(e)
+        })
     
     

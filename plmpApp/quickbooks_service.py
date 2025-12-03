@@ -20,8 +20,6 @@ from quickbooks.objects.account import Account
 from quickbooks.objects import CompanyInfo
 from quickbooks.exceptions import QuickbooksException
 logger = logging.getLogger(__name__)
-
-
 class QuickBooksService:
     def __init__(self, client_id=None):
         self.client_id_param = client_id
@@ -35,7 +33,6 @@ class QuickBooksService:
             redirect_uri=self.redirect_uri,
             environment=self.environment
         )
-
     def get_authorization_url(self):
         scopes = [
             Scopes.ACCOUNTING,
@@ -45,7 +42,6 @@ class QuickBooksService:
             Scopes.EMAIL,
         ]
         return self.auth_client.get_authorization_url(scopes=scopes)
-
     def handle_callback(self, auth_code, realm_id):
         from .models import QuickBooksToken, client
         try:
@@ -76,7 +72,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error handling callback: {e}")
             return {'success': False, 'error': str(e)}
-
     def refresh_access_token(self, realm_id):
         from .models import QuickBooksToken
         try:
@@ -92,7 +87,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error refreshing token: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_qb_client(self, realm_id):
         from .models import QuickBooksToken
         token = QuickBooksToken.objects(realm_id=realm_id).first()
@@ -113,7 +107,6 @@ class QuickBooksService:
             company_id=realm_id,
             minorversion=65
         )
-
     def disconnect(self, realm_id):
         from .models import QuickBooksToken
         try:
@@ -125,7 +118,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error disconnecting: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_connection_status(self):
         from .models import QuickBooksToken
         try:
@@ -158,7 +150,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error getting status: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_all_customers(self, realm_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -189,7 +180,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching customers: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_customer_details(self, realm_id, customer_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -216,7 +206,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching customer details: {e}")
             return {'success': False, 'error': str(e)}
-
     def create_customer(self, realm_id, customer_data):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -246,7 +235,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error creating customer: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_all_invoices(self, realm_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -280,7 +268,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching invoices: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_customer_invoices(self, realm_id, customer_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -301,7 +288,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching customer invoices: {e}")
             return {'success': False, 'error': str(e)}
-
     def create_invoice(self, realm_id, invoice_data):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -335,7 +321,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error creating invoice: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_all_payments(self, realm_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -371,7 +356,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching payments: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_customer_payments(self, realm_id, customer_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -389,7 +373,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching customer payments: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_all_vendors(self, realm_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -421,7 +404,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching vendors: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_vendor_details(self, realm_id, vendor_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -447,7 +429,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching vendor details: {e}")
             return {'success': False, 'error': str(e)}
-
     def create_vendor(self, realm_id, vendor_data):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -476,7 +457,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error creating vendor: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_all_bills(self, realm_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -502,7 +482,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching bills: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_vendor_bills(self, realm_id, vendor_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -523,7 +502,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching vendor bills: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_all_purchase_orders(self, realm_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -549,7 +527,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching purchase orders: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_vendor_purchase_orders(self, realm_id, vendor_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -568,7 +545,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching vendor purchase orders: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_all_items(self, realm_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -628,7 +604,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching items: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_inventory_report(self, realm_id):
         try:
             items_result = self.get_all_items(realm_id)
@@ -657,7 +632,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error generating inventory report: {e}")
             return {'success': False, 'error': str(e)}
-
     def create_item(self, realm_id, item_data):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -689,7 +663,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error creating item: {e}")
             return {'success': False, 'error': str(e)}
-
     def update_item_quantity(self, realm_id, item_id, new_quantity, adjustment_type='set'):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -714,7 +687,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error updating item quantity: {e}")
             return {'success': False, 'error': str(e)}
-
     def get_chart_of_accounts(self, realm_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -769,7 +741,6 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching chart of accounts: {e}")
             return {'success': False, 'error': str(e)}
-
     def sync_products_to_quickbooks(self, realm_id):
         from .models import products, QuickBooksSyncLog
         try:
@@ -829,7 +800,6 @@ class QuickBooksService:
                 error_message=str(e)
             ).save()
             return {'success': False, 'error': str(e)}
-
     def _format_address(self, addr):
         if not addr:
             return None
@@ -841,7 +811,6 @@ class QuickBooksService:
             'postal_code': addr.PostalCode if hasattr(addr, 'PostalCode') else None,
             'country': addr.Country if hasattr(addr, 'Country') else None
         }
-
     def _create_address(self, addr_data):
         from quickbooks.objects.base import Address
         addr = Address()
@@ -852,7 +821,6 @@ class QuickBooksService:
         addr.PostalCode = addr_data.get('postal_code', '')
         addr.Country = addr_data.get('country', '')
         return addr
-
     def _parse_invoice_lines(self, lines):
         if not lines:
             return []
@@ -871,7 +839,6 @@ class QuickBooksService:
                     'tax_code': detail.TaxCodeRef.value if hasattr(detail, 'TaxCodeRef') and detail.TaxCodeRef else None
                 })
         return line_items
-
     def _parse_bill_lines(self, lines):
         if not lines:
             return []
@@ -896,7 +863,6 @@ class QuickBooksService:
                     'amount': float(line.Amount) if line.Amount else 0
                 })
         return line_items
-
     def _parse_po_lines(self, lines):
         if not lines:
             return []
@@ -913,7 +879,6 @@ class QuickBooksService:
                     'amount': float(line.Amount) if line.Amount else 0
                 })
         return line_items
-
     def _get_payment_status(self, invoice):
         total = float(invoice.TotalAmt) if invoice.TotalAmt else 0
         balance = float(invoice.Balance) if invoice.Balance else 0
@@ -923,7 +888,6 @@ class QuickBooksService:
             return 'Partial'
         else:
             return 'Unpaid'
-
     def _get_discount_from_lines(self, lines):
         if not lines:
             return 0
@@ -931,7 +895,6 @@ class QuickBooksService:
             if line.DetailType == 'DiscountLineDetail':
                 return float(line.Amount) if line.Amount else 0
         return 0
-
     def _get_shipping_from_lines(self, lines):
         if not lines:
             return 0
@@ -941,14 +904,12 @@ class QuickBooksService:
                     if 'shipping' in line.SalesItemLineDetail.ItemRef.name.lower():
                         return float(line.Amount) if line.Amount else 0
         return 0
-
     def _get_income_account(self, qb_client):
         try:
             accounts = Account.filter(AccountType="Income", qb=qb_client)
             return accounts[0] if accounts else None
         except:
             return None
-
     def _get_expense_account(self, qb_client):
         try:
             accounts = Account.filter(
@@ -964,14 +925,11 @@ class QuickBooksService:
                 'sales_orders': [],
                 'count': 0
             }
-        
         try:
             qb_client = self.get_qb_client(realm_id)
-            
             entities_to_try = ['SalesOrder', 'Estimate']
             response = None
             used_entity = None
-            
             for entity in entities_to_try:
                 try:
                     query = f"SELECT * FROM {entity} ORDER BY MetaData.CreateTime DESC MAXRESULTS 1000"
@@ -985,7 +943,6 @@ class QuickBooksService:
                         continue
                     else:
                         raise e
-            
             if response is None:
                 return {
                     'success': False,
@@ -993,7 +950,6 @@ class QuickBooksService:
                     'sales_orders': [],
                     'count': 0
                 }
-            
             order_list = []
             if hasattr(response, 'QueryResponse'):
                 data = response.QueryResponse.get(used_entity, [])
@@ -1007,22 +963,20 @@ class QuickBooksService:
                             'total_amount': float(so.get('TotalAmt', 0)),
                             'status': so.get('TxnStatus', 'Open'),
                             'issue_date': so.get('TxnDate'),
-                            'expiry_date': so.get('ExpirationDate'),  # For Estimates
+                            'expiry_date': so.get('ExpirationDate'),  
                             'delivery_date': so.get('ShipDate'),
                             'created_at': so.get('MetaData', {}).get('CreateTime'),
-                            'entity_type': used_entity  # Track which entity was used
+                            'entity_type': used_entity  
                         })
                     except Exception as e:
                         logger.warning(f"Failed to parse {used_entity}: {e}")
                         continue
-            
             return {
                 'success': True,
                 'sales_orders': order_list,
                 'count': len(order_list),
                 'entity_type': used_entity
             }
-        
         except Exception as e:
             logger.error(f"Error fetching sales orders: {str(e)}")
             return {
@@ -1037,7 +991,6 @@ class QuickBooksService:
                 return {
                 'success':False,
                 'error':'Sales Order  is required',
-        
             }
             return {
                 "id":str(sales_order.Id) if hasattr(sales_order,'Id') and sales_order.Id else None,
@@ -1053,8 +1006,6 @@ class QuickBooksService:
                 'billing_address':self._format_address(sales_order.BillAddr) if hasattr(sales_order,'BillAddr') else None,
                 'memo': str(sales_order.CustomerMemo.value) if hasattr(sales_order, 'CustomerMemo') and sales_order.CustomerMemo else None,
                 'created_at': str(sales_order.MetaData.get("CreateTime")) if hasattr(sales_order, 'MetaData') and sales_order.MetaData else None
-
-                
             }
         except Exception as e:
             logger.warning(f"Failed to parse sales order: {str(e)}")
@@ -1076,7 +1027,6 @@ class QuickBooksService:
                             'unit_price':float(detail.UnitPrice) if detail.UnitPrice else 0.0,
                             'amount':float(line.Amount) if hasattr(line,'Amount') and line.Amount else 0.0,
                             'tax_code':str(detail.TaxCodeRef.value) if hasattr(detail,'TaxCodeRef') and detail.TaxCodeRef else None,
-                            
                         })
                 except Exception as e:
                     logger.debug(f"Failed to parse line item: {str(e)}")
@@ -1109,3 +1059,77 @@ class QuickBooksService:
             return accounts[0] if accounts else None
         except:
             return None
+    def get_invoice_details(self, realm_id, invoice_id):
+        try:
+            qb_client = self.get_qb_client(realm_id)
+            invoice = Invoice.get(invoice_id, qb=qb_client)
+            line_items = self._parse_invoice_lines(invoice.Line)
+            payments = []
+            try:
+                query = f"SELECT * FROM Payment WHERE Line.LinkedTxn.TxnId = '{invoice_id}'"
+                payment_response = qb_client.query(query)
+                if hasattr(payment_response, 'QueryResponse'):
+                    payment_data = payment_response.QueryResponse.get('Payment', [])
+                    for payment in payment_data:
+                        payments.append({
+                            'id': payment.get('Id'),
+                            'payment_date': payment.get('TxnDate'),
+                            'amount': float(payment.get('TotalAmt', 0)),
+                            'payment_method': payment.get('PaymentMethodRef', {}).get('name'),
+                            'payment_ref_number': payment.get('PaymentRefNum'),
+                            'deposit_account': payment.get('DepositToAccountRef', {}).get('name')
+                        })
+            except Exception as e:
+                logger.warning(f"Could not fetch payment details for invoice {invoice_id}: {e}")
+            invoice_details = {
+                'id': invoice.Id,
+                'doc_number': invoice.DocNumber,
+                'customer_id': invoice.CustomerRef.value if invoice.CustomerRef else None,
+                'customer_name': invoice.CustomerRef.name if invoice.CustomerRef else None,
+                'customer_email': invoice.BillEmail.Address if invoice.BillEmail else None,
+                'billing_address': self._format_address(invoice.BillAddr),
+                'shipping_address': self._format_address(invoice.ShipAddr),
+                'issue_date': str(invoice.TxnDate) if invoice.TxnDate else None,
+                'due_date': str(invoice.DueDate) if invoice.DueDate else None,
+                'ship_date': str(invoice.ShipDate) if invoice.ShipDate else None,
+                'created_at': str(invoice.MetaData.CreateTime) if invoice.MetaData else None,
+                'last_updated_at': str(invoice.MetaData.LastUpdatedTime) if invoice.MetaData and hasattr(invoice.MetaData, 'LastUpdatedTime') else None,
+                'subtotal': float(invoice.TotalAmt) - float(invoice.TxnTaxDetail.TotalTax if invoice.TxnTaxDetail and invoice.TxnTaxDetail.TotalTax else 0) if invoice.TotalAmt else 0,
+                'tax_amount': float(invoice.TxnTaxDetail.TotalTax) if invoice.TxnTaxDetail and invoice.TxnTaxDetail.TotalTax else 0,
+                'discount': self._get_discount_from_lines(invoice.Line),
+                'shipping': self._get_shipping_from_lines(invoice.Line),
+                'total_amount': float(invoice.TotalAmt) if invoice.TotalAmt else 0,
+                'balance_due': float(invoice.Balance) if invoice.Balance else 0,
+                'payment_status': self._get_payment_status(invoice),
+                'line_items': line_items,
+                'line_items_count': len(line_items),
+                'memo': invoice.CustomerMemo.value if invoice.CustomerMemo else None,
+                'terms': invoice.SalesTermRef.name if invoice.SalesTermRef else None,
+                'currency': invoice.CurrencyRef.value if invoice.CurrencyRef else 'USD',
+                'exchange_rate': float(invoice.ExchangeRate) if hasattr(invoice, 'ExchangeRate') and invoice.ExchangeRate else 1.0,
+                'linked_payments': payments,
+                'payment_count': len(payments),
+                'is_paid': float(invoice.Balance or 0) == 0,
+                'is_partial': 0 < float(invoice.Balance or 0) < float(invoice.TotalAmt or 0),
+                'is_overdue': self._is_invoice_overdue(invoice)
+            }
+            return {
+                'success': True,
+                'invoice': invoice_details
+            }
+        except Exception as e:
+            logger.error(f"Error fetching invoice details for invoice {invoice_id}: {e}")
+            return {'success': False, 'error': str(e)}
+        
+    def _is_invoice_overdue(self, invoice):
+        try:
+            if not invoice.DueDate:
+                return False
+            due_date = datetime.strptime(str(invoice.DueDate), '%Y-%m-%d')
+            today = datetime.now().date()
+            balance = float(invoice.Balance or 0)
+            if balance > 0 and due_date.date() < today:
+                return True
+            return False
+        except:
+            return False
