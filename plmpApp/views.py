@@ -4677,33 +4677,269 @@ def quickbooks_connect(request):
     try:
         qb_service = QuickBooksService()
         auth_url = qb_service.get_authorization_url()
-        return {
+        return JsonResponse({
             'estatus': True,
             'data': {'auth_url': auth_url}
-        }
+        })
     except Exception as e:
-        return {
+        return JsonResponse({
             'estatus': False,
+            'data': {},
             'emessage': str(e)
-        }
+        })
 @csrf_exempt
 def quickbooks_callback(request):
     try:
         auth_code = request.GET.get('code')
         realm_id = request.GET.get('realmId')
         error = request.GET.get('error')
+        
         if error:
-            return JsonResponse({'estatus': False, 'emessage': f"Authorization failed: {error}"})
+            return JsonResponse({
+                'estatus': False,
+                'data': {},
+                'emessage': f"Authorization failed: {error}"
+            })
+        
         if not auth_code or not realm_id:
-            return JsonResponse({'estatus': False, 'emessage': 'Missing code or realm ID'})
+            return JsonResponse({
+                'estatus': False,
+                'data': {},
+                'emessage': 'Missing code or realm ID'
+            })
+        
         qb_service = QuickBooksService()
         result = qb_service.handle_callback(auth_code, realm_id)
+        
         if result['success']:
-            return redirect(f"/Admin/quickbooks/success?realm_id={realm_id}")
+            # Return modern HTML that closes popup
+            html = """
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>QuickBooks Connected</title>
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 20px;
+                    }
+                    
+                    .container {
+                        background: white;
+                        border-radius: 20px;
+                        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                        padding: 48px;
+                        text-align: center;
+                        max-width: 480px;
+                        width: 100%;
+                        animation: slideUp 0.5s ease-out;
+                    }
+                    
+                    @keyframes slideUp {
+                        from {
+                            opacity: 0;
+                            transform: translateY(30px);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translateY(0);
+                        }
+                    }
+                    
+                    .success-icon {
+                        width: 80px;
+                        height: 80px;
+                        background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin: 0 auto 24px;
+                        animation: scaleIn 0.5s ease-out 0.2s both;
+                    }
+                    
+                    @keyframes scaleIn {
+                        from {
+                            transform: scale(0);
+                        }
+                        to {
+                            transform: scale(1);
+                        }
+                    }
+                    
+                    .checkmark {
+                        width: 40px;
+                        height: 40px;
+                        border: 4px solid white;
+                        border-top: none;
+                        border-right: none;
+                        transform: rotate(-45deg);
+                        animation: drawCheck 0.3s ease-out 0.5s both;
+                    }
+                    
+                    @keyframes drawCheck {
+                        from {
+                            width: 0;
+                            height: 0;
+                        }
+                        to {
+                            width: 40px;
+                            height: 40px;
+                        }
+                    }
+                    
+                    h1 {
+                        color: #2c3e50;
+                        font-size: 28px;
+                        font-weight: 700;
+                        margin-bottom: 12px;
+                        animation: fadeIn 0.5s ease-out 0.3s both;
+                    }
+                    
+                    p {
+                        color: #7f8c8d;
+                        font-size: 16px;
+                        line-height: 1.6;
+                        margin-bottom: 32px;
+                        animation: fadeIn 0.5s ease-out 0.4s both;
+                    }
+                    
+                    @keyframes fadeIn {
+                        from {
+                            opacity: 0;
+                        }
+                        to {
+                            opacity: 1;
+                        }
+                    }
+                    
+                    .close-btn {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        padding: 14px 32px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        border-radius: 50px;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+                        animation: fadeIn 0.5s ease-out 0.5s both;
+                    }
+                    
+                    .close-btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+                    }
+                    
+                    .close-btn:active {
+                        transform: translateY(0);
+                    }
+                    
+                    .auto-close {
+                        color: #95a5a6;
+                        font-size: 14px;
+                        margin-top: 16px;
+                        animation: fadeIn 0.5s ease-out 0.6s both;
+                    }
+                    
+                    @media (max-width: 480px) {
+                        .container {
+                            padding: 32px 24px;
+                        }
+                        
+                        h1 {
+                            font-size: 24px;
+                        }
+                        
+                        .success-icon {
+                            width: 64px;
+                            height: 64px;
+                        }
+                        
+                        .checkmark {
+                            width: 32px;
+                            height: 32px;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="success-icon">
+                        <div class="checkmark"></div>
+                    </div>
+                    <h1>Successfully Connected!</h1>
+                    <p>Your QuickBooks account has been connected successfully. You can now sync your financial data seamlessly.</p>
+                    <button class="close-btn">Continue to Accounts</button>
+                    <p class="auto-close">Redirecting in <span id="countdown">3</span> seconds</p>
+                </div>
+                
+                <script>
+                    let seconds = 3;
+                    const countdownEl = document.getElementById('countdown');
+                    
+                    // Determine redirect URL based on environment
+                    const redirectUrl = window.location.hostname === 'localhost' 
+                        ? 'http://localhost:3000/Admin/accounts'
+                        : 'https://plmp-fe.vercel.app/Admin/accounts';
+                    
+                    const timer = setInterval(() => {
+                        seconds--;
+                        countdownEl.textContent = seconds;
+                        
+                        if (seconds <= 0) {
+                            clearInterval(timer);
+                            // Try to close if this is a popup, otherwise redirect
+                            if (window.opener) {
+                                window.opener.location.href = redirectUrl;
+                                window.close();
+                            } else {
+                                window.location.href = redirectUrl;
+                            }
+                        }
+                    }, 1000);
+                    
+                    // Manual close button also redirects
+                    document.querySelector('.close-btn').onclick = function() {
+                        if (window.opener) {
+                            window.opener.location.href = redirectUrl;
+                            window.close();
+                        } else {
+                            window.location.href = redirectUrl;
+                        }
+                    };
+                </script>
+            </body>
+            </html>
+            """
+            return HttpResponse(html)
         else:
-            return JsonResponse({'estatus': False, 'emessage': result['error']})
+            return JsonResponse({
+                'estatus': False,
+                'data': result,
+                'emessage': result.get('error', 'Unknown error')
+            })
+    
     except Exception as e:
-        return JsonResponse({'estatus': False, 'emessage': str(e)})
+        return JsonResponse({
+            'estatus': False,
+            'data': {},
+            'emessage': str(e)
+        })
 @csrf_exempt
 def quickbooks_disconnect(request):
     try:
