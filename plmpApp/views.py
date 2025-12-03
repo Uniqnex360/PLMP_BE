@@ -683,6 +683,12 @@ def obtainAllProductList(request):
         f"{varient_option_value}|{brand_id}|{filter_param}|"
         f"{search_term}|{pg}|{level_name}"
     )
+    cache_key = hashlib.md5(raw_key_string.encode()).hexdigest()
+    cached_data = DatabaseModel.redis_client.get(cache_key)
+    if cached_data:
+        print(f"Cache HIT for key: {cache_key}")
+        return json.loads(cached_data)
+    print(f"Cache MISS for key: {cache_key} - Querying database...")
     if pg:
         try:
             pg = int(pg)
@@ -904,6 +910,11 @@ def obtainAllProductList(request):
         j['product_id'] = str(j['product_id']) if 'product_id' in j else ""
         getCategoryLevelOrder(j)
     data['product_list'] = result_
+    DatabaseModel.redis_client.setex(
+        cache_key,
+        300, 
+        json.dumps(data, default=str) 
+    )
     return data
 @csrf_exempt
 def obtainProductDetails(request):
