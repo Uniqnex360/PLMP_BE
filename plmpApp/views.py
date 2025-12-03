@@ -73,6 +73,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import redirect
+from django.template.context_processors import request
 from .quickbooks_service import QuickBooksService
 import json
 import logging
@@ -5069,8 +5070,20 @@ def quickbooks_create_vendor(request):
 def quickbooks_get_bills(request):
     try:
         realm_id = request.GET.get('realm_id')
+        mode=request.GET.get('mode','vendors')
         qb_service = QuickBooksService()
-        result = qb_service.get_all_bills(realm_id)
+        if mode=='customers':
+            result=qb_service.get_all_invoices(realm_id)
+            if result['success']:
+                result['customer_bills']=result.get('invoices',[])
+                if 'invoices' in result:
+                    del result['invoices']
+        else:
+            result=qb_service.get_all_bills(realm_id)
+            if result['success']:
+                result['vendor_bills']=result.get('bills',[])
+                if 'bills' in result:
+                    del result['bills']
         return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
     except Exception as e:
         return JsonResponse({'estatus': False, 'emessage': str(e)})
@@ -5078,11 +5091,37 @@ def quickbooks_get_bills(request):
 def quickbooks_get_purchase_orders(request):
     try:
         realm_id = request.GET.get('realm_id')
+        mode = request.GET.get('mode', 'vendors')  # Default to vendors
+        
         qb_service = QuickBooksService()
-        result = qb_service.get_all_purchase_orders(realm_id)
-        return JsonResponse({'estatus': result['success'], 'data': result, 'emessage': result.get('error', 'success')})
+        
+        if mode == 'customers':
+            # Fetch customer purchase orders (sales orders)
+            result = qb_service.get_all_sales_orders(realm_id)
+            if result['success']:
+                # Rename to customer_purchase_orders for clarity
+                result['customer_purchase_orders'] = result.get('sales_orders', [])
+                if 'sales_orders' in result:
+                    del result['sales_orders']
+        else:
+            # Fetch vendor purchase orders (default)
+            result = qb_service.get_all_purchase_orders(realm_id)
+            if result['success']:
+                # Rename to vendor_purchase_orders for clarity
+                result['vendor_purchase_orders'] = result.get('purchase_orders', [])
+                if 'purchase_orders' in result:
+                    del result['purchase_orders']
+        
+        return JsonResponse({
+            'estatus': result['success'], 
+            'data': result, 
+            'emessage': result.get('error', 'success')
+        })
     except Exception as e:
-        return JsonResponse({'estatus': False, 'emessage': str(e)})
+        return JsonResponse({
+            'estatus': False, 
+            'emessage': str(e)
+        })
 @csrf_exempt
 def quickbooks_get_items(request):
     try:
