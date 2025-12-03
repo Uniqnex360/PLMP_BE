@@ -1559,6 +1559,13 @@ def retrieveData(request):
 @csrf_exempt
 def obtainVarientForCategory(request):
     category_id = request.GET.get("id")
+    if not category_id:
+        return {
+            'STATUS_CODE': 400,
+            'error': 'Category ID is required',
+            'category_varient_id': '',
+            'varient_list': []
+        }
     client_id = get_current_client()
     pipeline = [
         {
