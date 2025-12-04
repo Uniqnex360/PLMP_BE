@@ -288,6 +288,7 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error fetching customer invoices: {e}")
             return {'success': False, 'error': str(e)}
+    
     def create_invoice(self, realm_id, invoice_data):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -321,6 +322,16 @@ class QuickBooksService:
         except Exception as e:
             logger.error(f"Error creating invoice: {e}")
             return {'success': False, 'error': str(e)}
+    def get_payments_for_credit(self,payment_obj):
+        if not payment_obj:
+            return 0
+        if not hasattr(payment_obj,'Line') or not payment_obj.Line:
+            return 0
+        for line in payment_obj.Line:
+            if line.Amount:
+                return float(line.Amount)
+        return 0
+    
     def get_all_payments(self, realm_id):
         try:
             qb_client = self.get_qb_client(realm_id)
@@ -342,7 +353,7 @@ class QuickBooksService:
                     'customer_id': p.CustomerRef.value if p.CustomerRef else None,
                     'customer_name': p.CustomerRef.name if p.CustomerRef else None,
                     'payment_date': str(p.TxnDate) if p.TxnDate else None,
-                    'amount': float(p.TotalAmt) if p.TotalAmt else 0,
+                    'amount':self.get_payments_for_credit(p) if p.TotalAmt==0 else  float(p.TotalAmt) if p.TotalAmt else 0,
                     'payment_method': p.PaymentMethodRef.name if p.PaymentMethodRef else None,
                     'payment_ref_number': p.PaymentRefNum,
                     'deposit_account': p.DepositToAccountRef.name if p.DepositToAccountRef else None,
@@ -365,8 +376,8 @@ class QuickBooksService:
                 payment_list.append({
                     'id': p.Id,
                     'payment_date': str(p.TxnDate) if p.TxnDate else None,
-                    'amount': float(p.TotalAmt) if p.TotalAmt else 0,
-                    'payment_method': p.PaymentMethodRef.name if p.PaymentMethodRef else None,
+                    'amount':self.get_payments_for_credit(p) if p.TotalAmt==0 else  float(p.TotalAmt) if p.TotalAmt else 0,
+                    'payment_method': "Credit Applied" if p.TotalAmt == 0 and hasattr(p, 'Line') and p.Line else (p.PaymentMethodRef.name if p.PaymentMethodRef else None),
                     'payment_ref_number': p.PaymentRefNum
                 })
             return {'success': True, 'payments': payment_list}
