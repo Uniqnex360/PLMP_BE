@@ -1043,18 +1043,9 @@ def get_all_category_ids_optimized(category_id, level_name, client_id):
 #     return data
 @csrf_exempt
 def obtainAllProductList(request):
-    """
-    Optimized version with:
-    - Early filtering to reduce dataset
-    - Pagination in aggregation pipeline
-    - Single query with $facet for count + results
-    - Conditional lookups only when needed
-    - Reduced memory footprint
-    """
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
     client_id = get_current_client()
     
-    # Extract query parameters
     category_id = request.GET.get("category_id")
     varient_option_name = request.GET.get("variant_option_name_id")
     varient_option_value = request.GET.get("variant_option_value_id")
@@ -1064,7 +1055,6 @@ def obtainAllProductList(request):
     pg = request.GET.get('pg')
     level_name = request.GET.get("level_name")
     
-    # Generate cache key
     raw_key_string = (
         f"{user_login_id}|{category_id}|{varient_option_name}|"
         f"{varient_option_value}|{brand_id}|{filter_param}|"
@@ -1072,7 +1062,6 @@ def obtainAllProductList(request):
     )
     cache_key = f"product_list:{hashlib.md5(raw_key_string.encode()).hexdigest()}"
     
-    # Check cache
     cached_data = DatabaseModel.redis_client.get(cache_key)
     if cached_data:
         print(f"Cache HIT for key: {cache_key}")
@@ -1080,7 +1069,6 @@ def obtainAllProductList(request):
     
     print(f"Cache MISS for key: {cache_key} - Querying database...")
     
-    # Pagination setup
     try:
         pg = int(pg) if pg else 1
         from_pg = (pg - 1) * 25
@@ -1089,16 +1077,12 @@ def obtainAllProductList(request):
         from_pg = 0
         to_pg = 25
     
-    # Sort order
     reverse_check = -1 if (filter_param == "true" or filter_param is None) else 1
     
-    # Get user role for active filter
     user_obj = DatabaseModel.get_document(user.objects.only('role'), {'id': user_login_id})
     
-    # Build initial match conditions
     match_conditions = {}
     
-    # Category filter - optimized
     if category_id:
         if level_name:
             all_ids = get_all_category_ids_optimized(category_id, level_name, client_id)
@@ -1106,7 +1090,6 @@ def obtainAllProductList(request):
         else:
             match_conditions["category_id"] = category_id
     
-    # Initial pipeline with early filtering
     pipeline = [
         {"$match": match_conditions} if match_conditions else {"$match": {}},
         {
@@ -1120,12 +1103,10 @@ def obtainAllProductList(request):
         {"$unwind": {"path": "$products"}}
     ]
     
-    # Active filter for client-admin
     product_match = {}
     if user_obj and user_obj.role == 'client-admin':
         product_match["products.is_active"] = True
     
-    # Search filter - applied early to reduce dataset
     if search_term:
         product_match["$or"] = [
             {"products.upc_ean": {"$regex": search_term, "$options": "i"}},
@@ -1139,7 +1120,6 @@ def obtainAllProductList(request):
     if product_match:
         pipeline.append({"$match": product_match})
     
-    # Variant option filter - only if needed
     if varient_option_name:
         varient_option_obj = DatabaseModel.get_document(
             varient_option.objects.only('option_name_id'),
@@ -1178,7 +1158,6 @@ def obtainAllProductList(request):
                 }
             pipeline.append({"$match": variant_match})
     
-    # Brand lookup - optimized with existing indexes
     pipeline.extend([
         {
             "$lookup": {
@@ -1191,11 +1170,9 @@ def obtainAllProductList(request):
         {"$unwind": {"path": "$brand", "preserveNullAndEmptyArrays": True}}
     ])
     
-    # Brand filter
     if brand_id:
         pipeline.append({"$match": {"brand._id": ObjectId(brand_id)}})
     
-    # Add search filter for brand name if search term exists
     if search_term:
         pipeline.append({
             "$match": {
@@ -1211,7 +1188,6 @@ def obtainAllProductList(request):
             }
         })
     
-    # Group stage
     pipeline.append({
         "$group": {
             "_id": "$_id",
@@ -1237,10 +1213,8 @@ def obtainAllProductList(request):
         }
     })
     
-    # Sort
     pipeline.append({"$sort": {"_id": reverse_check}})
     
-    # Use $facet to get both count and paginated results in one query
     pipeline.append({
         "$facet": {
             "metadata": [{"$count": "total"}],
@@ -1251,10 +1225,8 @@ def obtainAllProductList(request):
         }
     })
     
-    # Execute aggregation
     result = list(product_category_config.objects.aggregate(*pipeline))
     
-    # Extract results
     if result and len(result) > 0:
         metadata = result[0].get("metadata", [])
         product_count = metadata[0]["total"] if metadata else 0
@@ -1263,7 +1235,6 @@ def obtainAllProductList(request):
         product_count = 0
         products_data = []
     
-    # Format response
     for item in products_data:
         del item["_id"]
         item["product_id"] = str(item["product_id"]) if "product_id" in item else ""
@@ -1275,7 +1246,6 @@ def obtainAllProductList(request):
         "product_id_list": [item["product_id"] for item in products_data]
     }
     
-    # Cache the result (5 minutes)
     DatabaseModel.redis_client.setex(
         cache_key,
         300,
