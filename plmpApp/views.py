@@ -4,6 +4,7 @@ from django.conf import settings
 from functools import lru_cache
 from django.core.mail import send_mail
 import logging
+from datetime import datetime
 from collections import defaultdict
 import time
 from bson import ObjectId
@@ -666,256 +667,621 @@ def obtainCategoryAndSections(request):
     data['category_list'] = result
     data['category_count'] = len(result)
     return data
+def get_all_category_ids_optimized(category_id, level_name, client_id):
+    """
+    Optimized category ID collection using database aggregation
+    instead of nested loops with multiple queries
+    """
+    if not level_name:
+        return [category_id]
+    
+    # Build aggregation pipeline based on level
+    pipeline = []
+    
+    if level_name == "level-1":
+        pipeline = [
+            {"$match": {"_id": ObjectId(category_id), "client_id": ObjectId(client_id)}},
+            {"$graphLookup": {
+                "from": "level_one_category",
+                "startWith": "$level_one_category_list",
+                "connectFromField": "level_two_category_list",
+                "connectToField": "_id",
+                "as": "all_children",
+                "maxDepth": 4
+            }},
+            {"$project": {
+                "ids": {
+                    "$concatArrays": [
+                        [{"$toString": "$_id"}],
+                        {"$map": {"input": "$all_children", "as": "child", "in": {"$toString": "$$child._id"}}}
+                    ]
+                }
+            }}
+        ]
+        result = list(category.objects.aggregate(*pipeline))
+        
+    elif level_name == "level-2":
+        pipeline = [
+            {"$match": {"_id": ObjectId(category_id)}},
+            {"$graphLookup": {
+                "from": "level_two_category",
+                "startWith": "$level_two_category_list",
+                "connectFromField": "level_three_category_list",
+                "connectToField": "_id",
+                "as": "all_children",
+                "maxDepth": 3
+            }},
+            {"$project": {
+                "ids": {
+                    "$concatArrays": [
+                        [{"$toString": "$_id"}],
+                        {"$map": {"input": "$all_children", "as": "child", "in": {"$toString": "$$child._id"}}}
+                    ]
+                }
+            }}
+        ]
+        result = list(level_one_category.objects.aggregate(*pipeline))
+        
+    elif level_name == "level-3":
+        pipeline = [
+            {"$match": {"_id": ObjectId(category_id)}},
+            {"$graphLookup": {
+                "from": "level_three_category",
+                "startWith": "$level_three_category_list",
+                "connectFromField": "level_four_category_list",
+                "connectToField": "_id",
+                "as": "all_children",
+                "maxDepth": 2
+            }},
+            {"$project": {
+                "ids": {
+                    "$concatArrays": [
+                        [{"$toString": "$_id"}],
+                        {"$map": {"input": "$all_children", "as": "child", "in": {"$toString": "$$child._id"}}}
+                    ]
+                }
+            }}
+        ]
+        result = list(level_two_category.objects.aggregate(*pipeline))
+        
+    elif level_name == "level-4":
+        pipeline = [
+            {"$match": {"_id": ObjectId(category_id)}},
+            {"$graphLookup": {
+                "from": "level_four_category",
+                "startWith": "$level_four_category_list",
+                "connectFromField": "level_five_category_list",
+                "connectToField": "_id",
+                "as": "all_children",
+                "maxDepth": 1
+            }},
+            {"$project": {
+                "ids": {
+                    "$concatArrays": [
+                        [{"$toString": "$_id"}],
+                        {"$map": {"input": "$all_children", "as": "child", "in": {"$toString": "$$child._id"}}}
+                    ]
+                }
+            }}
+        ]
+        result = list(level_three_category.objects.aggregate(*pipeline))
+        
+    elif level_name == "level-5":
+        pipeline = [
+            {"$match": {"_id": ObjectId(category_id)}},
+            {"$graphLookup": {
+                "from": "level_five_category",
+                "startWith": "$level_five_category_list",
+                "connectFromField": "_id",
+                "connectToField": "_id",
+                "as": "all_children",
+                "maxDepth": 0
+            }},
+            {"$project": {
+                "ids": {
+                    "$concatArrays": [
+                        [{"$toString": "$_id"}],
+                        {"$map": {"input": "$all_children", "as": "child", "in": {"$toString": "$$child._id"}}}
+                    ]
+                }
+            }}
+        ]
+        result = list(level_four_category.objects.aggregate(*pipeline))
+    
+    return result[0]["ids"] if result and "ids" in result[0] else [str(category_id)]
+
+@csrf_exempt
+# def obtainAllProductList(request):
+#     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
+#     print("USER_LGOIN_ID", user_login_id)
+#     client_id = get_current_client()
+#     category_id = request.GET.get("category_id")
+#     varient_option_name = request.GET.get("variant_option_name_id")
+#     varient_option_value = request.GET.get("variant_option_value_id")
+#     brand_id = request.GET.get("brand_id")
+#     filter_param = request.GET.get("filter")
+#     search_term = request.GET.get('search')
+#     pg = request.GET.get('pg')
+#     level_name = request.GET.get("level_name")
+#     raw_key_string = (
+#         f"{user_login_id}|{category_id}|{varient_option_name}|"
+#         f"{varient_option_value}|{brand_id}|{filter_param}|"
+#         f"{search_term}|{pg}|{level_name}"
+#     )
+#     cache_key = hashlib.md5(raw_key_string.encode()).hexdigest()
+#     cached_data = DatabaseModel.redis_client.get(cache_key)
+#     if cached_data:
+#         print(f"Cache HIT for key: {cache_key}")
+#         return json.loads(cached_data)
+#     print(f"Cache MISS for key: {cache_key} - Querying database...")
+#     if pg:
+#         try:
+#             pg = int(pg)
+#             from_pg = (pg - 1) * 25
+#             to_pg = pg * 25
+#         except ValueError:
+#             from_pg = 0
+#             to_pg = 25
+#     else:
+#         from_pg = 0
+#         to_pg = 25
+#     if search_term == None:
+#         search_term = ""
+#     if filter_param == "true" or filter_param == None:
+#         reverse_check = -1
+#     else:
+#         reverse_check = 1
+#     level_name = request.GET.get("level_name")
+#     brand_obj = {}
+#     if brand_id != None:
+#         brand_obj = {"brand._id": ObjectId(brand_id)}
+#     product_varient_option_obj = {}
+#     if varient_option_name:
+#         varient_option_obj = DatabaseModel.get_document(varient_option.objects, {
+#                                                         'id': ObjectId(varient_option_name), 'category_str': category_id})
+#         if varient_option_obj:
+#             product_varient_option_obj = {
+#                 'product_varient_option_ins.option_name_id': varient_option_obj.option_name_id.id}
+#             if varient_option_value:
+#                 product_varient_option_obj = {
+#                     "$and": [
+#                         {"product_varient_option_ins.option_name_id": varient_option_obj.option_name_id.id},
+#                         {"product_varient_option_ins.option_value_id": ObjectId(
+#                             varient_option_value)}
+#                     ]
+#                 }
+#     category_obj = {}
+#     if category_id != None and level_name == None:
+#         category_obj = {"category_id": category_id}
+#     elif category_id:
+#         all_ids = []
+#         if level_name == "level-1":
+#             category_obj = DatabaseModel.get_document(
+#                 category.objects, {'id': category_id, "client_id": client_id})
+#             if category_obj:
+#                 all_ids.append(category_id)
+#                 for i in category_obj.level_one_category_list:
+#                     all_ids.append(i.id)
+#                     for j in i.level_two_category_list:
+#                         all_ids.append(j.id)
+#                         for k in j.level_three_category_list:
+#                             all_ids.append(k.id)
+#                             for l in k.level_four_category_list:
+#                                 all_ids.append(l.id)
+#                                 for m in l.level_five_category_list:
+#                                     all_ids.append(m.id)
+#         elif level_name == "level-2":
+#             level_one_category_obj = DatabaseModel.get_document(
+#                 level_one_category.objects, {'id': category_id})
+#             if level_one_category_obj:
+#                 all_ids.append(level_one_category_obj.id)
+#                 for j in level_one_category_obj.level_two_category_list:
+#                     all_ids.append(j.id)
+#                     for k in j.level_three_category_list:
+#                         all_ids.append(k.id)
+#                         for l in k.level_four_category_list:
+#                             all_ids.append(l.id)
+#                             for m in l.level_five_category_list:
+#                                 all_ids.append(m.id)
+#         elif level_name == "level-3":
+#             level_two_category_obj = DatabaseModel.get_document(
+#                 level_two_category.objects, {'id': category_id})
+#             if level_two_category_obj:
+#                 all_ids.append(level_two_category_obj.id)
+#                 for k in level_two_category_obj.level_three_category_list:
+#                     all_ids.append(k.id)
+#                     for l in k.level_four_category_list:
+#                         all_ids.append(l.id)
+#                         for m in l.level_five_category_list:
+#                             all_ids.append(m.id)
+#         elif level_name == "level-4":
+#             level_three_category_obj = DatabaseModel.get_document(
+#                 level_three_category.objects, {'id': category_id})
+#             if level_three_category_obj:
+#                 all_ids.append(level_three_category_obj.id)
+#                 for l in level_three_category_obj.level_four_category_list:
+#                     all_ids.append(l.id)
+#                     for m in l.level_five_category_list:
+#                         all_ids.append(m.id)
+#         elif level_name == "level-5":
+#             level_four_category_obj = DatabaseModel.get_document(
+#                 level_four_category.objects, {'id': category_id})
+#             if level_four_category_obj:
+#                 all_ids.append(level_four_category_obj.id)
+#                 for m in level_four_category_obj.level_five_category_list:
+#                     all_ids.append(m.id)
+#         all_ids = [str(i) for i in all_ids]
+#         category_obj = {"category_id": {'$in': all_ids}}
+#     else:
+#         category_obj = {}
+#     user_obj = DatabaseModel.get_document(user.objects, {'id': user_login_id})
+#     active_obj = {}
+#     if user_obj.role == 'client-admin':
+#         active_obj = {'products.is_active': True}
+#     pipeline = [
+#         {
+#             "$match": category_obj
+#         },
+#         {
+#             '$lookup': {
+#                 'from': 'products',
+#                 'localField': 'product_id',
+#                 'foreignField': '_id',
+#                 'as': 'products'
+#             }
+#         },
+#         {
+#             "$match": active_obj
+#         },
+#         {
+#             '$unwind': {
+#                 'path': '$products',
+#             }
+#         },
+#     ]
+#     if product_varient_option_obj:
+#         pipeline.extend([
+#             {
+#                 '$lookup': {
+#                     "from": 'product_varient',
+#                     "localField": 'products.options',
+#                     "foreignField": "_id",
+#                     "as": "product_varient_ins"
+#                 }
+#             },
+#             {
+#                 '$unwind': {
+#                     'path': '$product_varient_ins',
+#                     'preserveNullAndEmptyArrays': True
+#                 }
+#             },
+#             {
+#                 '$lookup': {
+#                     "from": 'product_varient_option',
+#                     "localField": 'product_varient_ins.varient_option_id',
+#                     "foreignField": "_id",
+#                     "as": "product_varient_option_ins"
+#                 }
+#             },
+#             {
+#                 '$unwind': {
+#                     'path': '$product_varient_option_ins',
+#                     'preserveNullAndEmptyArrays': True
+#                 }
+#             }, {
+#                 "$match": product_varient_option_obj
+#             }])
+#     pipeline.extend([
+#         {
+#             '$lookup': {
+#                 'from': 'brand',
+#                 'localField': 'products.brand_id',
+#                 'foreignField': '_id',
+#                 'as': 'brand'
+#             }
+#         },
+#         {
+#             '$unwind': {
+#                 'path': '$brand',
+#                 'preserveNullAndEmptyArrays': True
+#             }
+#         }, {
+#             "$match": brand_obj
+#         },
+#         {
+#             '$group': {
+#                 "_id": '$_id',
+#                 'product_name': {'$first': "$products.product_name"},
+#                 'product_id': {'$first': "$products._id"},
+#                 'model': {'$first': "$products.model"},
+#                 'upc_ean': {'$first': "$products.upc_ean"},
+#                 'is_active': {'$first': "$products.is_active"},
+#                 'breadcrumb': {'$first': "$products.breadcrumb"},
+#                 'brand': {'$first': "$brand.name"},
+#                 'long_description': {'$first': "$products.long_description"},
+#                 'short_description': {'$first': "$products.short_description"},
+#                 'features': {'$first': "$products.features"},
+#                 'attributes': {'$first': "$products.attributes"},
+#                 'tags': {'$first': "$products.tags"},
+#                 'msrp': {'$first': "$products.msrp"},
+#                 'mpn': {'$first': "$products.mpn"},
+#                 'base_price': {'$first': "$products.base_price"},
+#                 'key_features': {'$first': "$products.key_features"},
+#                 'image': {'$first': "$products.image"},
+#                 'level': {'$first': '$category_level'},
+#                 'category_id': {'$first': '$category_id'}
+#             }
+#         }, {
+#             '$match': {
+#                 '$or': [
+#                     {'upc_ean': {'$regex': search_term, '$options': 'i'}},
+#                     {'short_description': {'$regex': search_term, '$options': 'i'}},
+#                     {'mpn': {'$regex': search_term, '$options': 'i'}},
+#                     {'product_name': {'$regex': search_term, '$options': 'i'}},
+#                     {'brand': {'$regex': search_term, '$options': 'i'}},
+#                     {'model': {'$regex': search_term, '$options': 'i'}},
+#                     {'features': {'$regex': search_term, '$options': 'i'}},
+#                 ]
+#             }
+#         }, {'$sort': {'_id': reverse_check}}
+#     ])
+#     result = list(product_category_config.objects.aggregate(*pipeline))
+#     data = dict()
+#     data['product_count'] = len(result)
+#     data['product_id_list'] = [str(i['product_id'])for i in result]
+#     result_ = result[from_pg:to_pg]
+#     for j in result_:
+#         del (j['_id'])
+#         j['product_id'] = str(j['product_id']) if 'product_id' in j else ""
+#         getCategoryLevelOrder(j)
+#     data['product_list'] = result_
+#     DatabaseModel.redis_client.setex(
+#         cache_key,
+#         300, 
+#         json.dumps(data, default=str) 
+#     )
+#     return data
 @csrf_exempt
 def obtainAllProductList(request):
+    """
+    Optimized version with:
+    - Early filtering to reduce dataset
+    - Pagination in aggregation pipeline
+    - Single query with $facet for count + results
+    - Conditional lookups only when needed
+    - Reduced memory footprint
+    """
     user_login_id = request.META.get('HTTP_USER_LOGIN_ID')
-    print("USER_LGOIN_ID", user_login_id)
     client_id = get_current_client()
+    
+    # Extract query parameters
     category_id = request.GET.get("category_id")
     varient_option_name = request.GET.get("variant_option_name_id")
     varient_option_value = request.GET.get("variant_option_value_id")
     brand_id = request.GET.get("brand_id")
     filter_param = request.GET.get("filter")
-    search_term = request.GET.get('search')
+    search_term = request.GET.get('search', "")
     pg = request.GET.get('pg')
     level_name = request.GET.get("level_name")
+    
+    # Generate cache key
     raw_key_string = (
         f"{user_login_id}|{category_id}|{varient_option_name}|"
         f"{varient_option_value}|{brand_id}|{filter_param}|"
         f"{search_term}|{pg}|{level_name}"
     )
-    cache_key = hashlib.md5(raw_key_string.encode()).hexdigest()
+    cache_key = f"product_list:{hashlib.md5(raw_key_string.encode()).hexdigest()}"
+    
+    # Check cache
     cached_data = DatabaseModel.redis_client.get(cache_key)
     if cached_data:
         print(f"Cache HIT for key: {cache_key}")
         return json.loads(cached_data)
+    
     print(f"Cache MISS for key: {cache_key} - Querying database...")
-    if pg:
-        try:
-            pg = int(pg)
-            from_pg = (pg - 1) * 25
-            to_pg = pg * 25
-        except ValueError:
-            from_pg = 0
-            to_pg = 25
-    else:
+    
+    # Pagination setup
+    try:
+        pg = int(pg) if pg else 1
+        from_pg = (pg - 1) * 25
+        to_pg = 25
+    except ValueError:
         from_pg = 0
         to_pg = 25
-    if search_term == None:
-        search_term = ""
-    if filter_param == "true" or filter_param == None:
-        reverse_check = -1
-    else:
-        reverse_check = 1
-    level_name = request.GET.get("level_name")
-    brand_obj = {}
-    if brand_id != None:
-        brand_obj = {"brand._id": ObjectId(brand_id)}
-    product_varient_option_obj = {}
+    
+    # Sort order
+    reverse_check = -1 if (filter_param == "true" or filter_param is None) else 1
+    
+    # Get user role for active filter
+    user_obj = DatabaseModel.get_document(user.objects.only('role'), {'id': user_login_id})
+    
+    # Build initial match conditions
+    match_conditions = {}
+    
+    # Category filter - optimized
+    if category_id:
+        if level_name:
+            all_ids = get_all_category_ids_optimized(category_id, level_name, client_id)
+            match_conditions["category_id"] = {"$in": all_ids}
+        else:
+            match_conditions["category_id"] = category_id
+    
+    # Initial pipeline with early filtering
+    pipeline = [
+        {"$match": match_conditions} if match_conditions else {"$match": {}},
+        {
+            "$lookup": {
+                "from": "products",
+                "localField": "product_id",
+                "foreignField": "_id",
+                "as": "products"
+            }
+        },
+        {"$unwind": {"path": "$products"}}
+    ]
+    
+    # Active filter for client-admin
+    product_match = {}
+    if user_obj and user_obj.role == 'client-admin':
+        product_match["products.is_active"] = True
+    
+    # Search filter - applied early to reduce dataset
+    if search_term:
+        product_match["$or"] = [
+            {"products.upc_ean": {"$regex": search_term, "$options": "i"}},
+            {"products.product_name": {"$regex": search_term, "$options": "i"}},
+            {"products.mpn": {"$regex": search_term, "$options": "i"}},
+            {"products.model": {"$regex": search_term, "$options": "i"}},
+            {"products.short_description": {"$regex": search_term, "$options": "i"}},
+            {"products.features": {"$regex": search_term, "$options": "i"}}
+        ]
+    
+    if product_match:
+        pipeline.append({"$match": product_match})
+    
+    # Variant option filter - only if needed
     if varient_option_name:
-        varient_option_obj = DatabaseModel.get_document(varient_option.objects, {
-                                                        'id': ObjectId(varient_option_name), 'category_str': category_id})
+        varient_option_obj = DatabaseModel.get_document(
+            varient_option.objects.only('option_name_id'),
+            {'id': ObjectId(varient_option_name), 'category_str': category_id}
+        )
+        
         if varient_option_obj:
-            product_varient_option_obj = {
-                'product_varient_option_ins.option_name_id': varient_option_obj.option_name_id.id}
+            pipeline.extend([
+                {
+                    "$lookup": {
+                        "from": "product_varient",
+                        "localField": "products.options",
+                        "foreignField": "_id",
+                        "as": "product_varient_ins"
+                    }
+                },
+                {"$unwind": {"path": "$product_varient_ins", "preserveNullAndEmptyArrays": True}},
+                {
+                    "$lookup": {
+                        "from": "product_varient_option",
+                        "localField": "product_varient_ins.varient_option_id",
+                        "foreignField": "_id",
+                        "as": "product_varient_option_ins"
+                    }
+                },
+                {"$unwind": {"path": "$product_varient_option_ins", "preserveNullAndEmptyArrays": True}}
+            ])
+            
+            variant_match = {"product_varient_option_ins.option_name_id": varient_option_obj.option_name_id.id}
             if varient_option_value:
-                product_varient_option_obj = {
+                variant_match = {
                     "$and": [
                         {"product_varient_option_ins.option_name_id": varient_option_obj.option_name_id.id},
-                        {"product_varient_option_ins.option_value_id": ObjectId(
-                            varient_option_value)}
+                        {"product_varient_option_ins.option_value_id": ObjectId(varient_option_value)}
                     ]
                 }
-    category_obj = {}
-    if category_id != None and level_name == None:
-        category_obj = {"category_id": category_id}
-    elif category_id:
-        all_ids = []
-        if level_name == "level-1":
-            category_obj = DatabaseModel.get_document(
-                category.objects, {'id': category_id, "client_id": client_id})
-            if category_obj:
-                all_ids.append(category_id)
-                for i in category_obj.level_one_category_list:
-                    all_ids.append(i.id)
-                    for j in i.level_two_category_list:
-                        all_ids.append(j.id)
-                        for k in j.level_three_category_list:
-                            all_ids.append(k.id)
-                            for l in k.level_four_category_list:
-                                all_ids.append(l.id)
-                                for m in l.level_five_category_list:
-                                    all_ids.append(m.id)
-        elif level_name == "level-2":
-            level_one_category_obj = DatabaseModel.get_document(
-                level_one_category.objects, {'id': category_id})
-            if level_one_category_obj:
-                all_ids.append(level_one_category_obj.id)
-                for j in level_one_category_obj.level_two_category_list:
-                    all_ids.append(j.id)
-                    for k in j.level_three_category_list:
-                        all_ids.append(k.id)
-                        for l in k.level_four_category_list:
-                            all_ids.append(l.id)
-                            for m in l.level_five_category_list:
-                                all_ids.append(m.id)
-        elif level_name == "level-3":
-            level_two_category_obj = DatabaseModel.get_document(
-                level_two_category.objects, {'id': category_id})
-            if level_two_category_obj:
-                all_ids.append(level_two_category_obj.id)
-                for k in level_two_category_obj.level_three_category_list:
-                    all_ids.append(k.id)
-                    for l in k.level_four_category_list:
-                        all_ids.append(l.id)
-                        for m in l.level_five_category_list:
-                            all_ids.append(m.id)
-        elif level_name == "level-4":
-            level_three_category_obj = DatabaseModel.get_document(
-                level_three_category.objects, {'id': category_id})
-            if level_three_category_obj:
-                all_ids.append(level_three_category_obj.id)
-                for l in level_three_category_obj.level_four_category_list:
-                    all_ids.append(l.id)
-                    for m in l.level_five_category_list:
-                        all_ids.append(m.id)
-        elif level_name == "level-5":
-            level_four_category_obj = DatabaseModel.get_document(
-                level_four_category.objects, {'id': category_id})
-            if level_four_category_obj:
-                all_ids.append(level_four_category_obj.id)
-                for m in level_four_category_obj.level_five_category_list:
-                    all_ids.append(m.id)
-        all_ids = [str(i) for i in all_ids]
-        category_obj = {"category_id": {'$in': all_ids}}
-    else:
-        category_obj = {}
-    user_obj = DatabaseModel.get_document(user.objects, {'id': user_login_id})
-    active_obj = {}
-    if user_obj.role == 'client-admin':
-        active_obj = {'products.is_active': True}
-    pipeline = [
-        {
-            "$match": category_obj
-        },
-        {
-            '$lookup': {
-                'from': 'products',
-                'localField': 'product_id',
-                'foreignField': '_id',
-                'as': 'products'
-            }
-        },
-        {
-            "$match": active_obj
-        },
-        {
-            '$unwind': {
-                'path': '$products',
-            }
-        },
-    ]
-    if product_varient_option_obj:
-        pipeline.extend([
-            {
-                '$lookup': {
-                    "from": 'product_varient',
-                    "localField": 'products.options',
-                    "foreignField": "_id",
-                    "as": "product_varient_ins"
-                }
-            },
-            {
-                '$unwind': {
-                    'path': '$product_varient_ins',
-                    'preserveNullAndEmptyArrays': True
-                }
-            },
-            {
-                '$lookup': {
-                    "from": 'product_varient_option',
-                    "localField": 'product_varient_ins.varient_option_id',
-                    "foreignField": "_id",
-                    "as": "product_varient_option_ins"
-                }
-            },
-            {
-                '$unwind': {
-                    'path': '$product_varient_option_ins',
-                    'preserveNullAndEmptyArrays': True
-                }
-            }, {
-                "$match": product_varient_option_obj
-            }])
+            pipeline.append({"$match": variant_match})
+    
+    # Brand lookup - optimized with existing indexes
     pipeline.extend([
         {
-            '$lookup': {
-                'from': 'brand',
-                'localField': 'products.brand_id',
-                'foreignField': '_id',
-                'as': 'brand'
+            "$lookup": {
+                "from": "brand",
+                "localField": "products.brand_id",
+                "foreignField": "_id",
+                "as": "brand"
             }
         },
-        {
-            '$unwind': {
-                'path': '$brand',
-                'preserveNullAndEmptyArrays': True
-            }
-        }, {
-            "$match": brand_obj
-        },
-        {
-            '$group': {
-                "_id": '$_id',
-                'product_name': {'$first': "$products.product_name"},
-                'product_id': {'$first': "$products._id"},
-                'model': {'$first': "$products.model"},
-                'upc_ean': {'$first': "$products.upc_ean"},
-                'is_active': {'$first': "$products.is_active"},
-                'breadcrumb': {'$first': "$products.breadcrumb"},
-                'brand': {'$first': "$brand.name"},
-                'long_description': {'$first': "$products.long_description"},
-                'short_description': {'$first': "$products.short_description"},
-                'features': {'$first': "$products.features"},
-                'attributes': {'$first': "$products.attributes"},
-                'tags': {'$first': "$products.tags"},
-                'msrp': {'$first': "$products.msrp"},
-                'mpn': {'$first': "$products.mpn"},
-                'base_price': {'$first': "$products.base_price"},
-                'key_features': {'$first': "$products.key_features"},
-                'image': {'$first': "$products.image"},
-                'level': {'$first': '$category_level'},
-                'category_id': {'$first': '$category_id'}
-            }
-        }, {
-            '$match': {
-                '$or': [
-                    {'upc_ean': {'$regex': search_term, '$options': 'i'}},
-                    {'short_description': {'$regex': search_term, '$options': 'i'}},
-                    {'mpn': {'$regex': search_term, '$options': 'i'}},
-                    {'product_name': {'$regex': search_term, '$options': 'i'}},
-                    {'brand': {'$regex': search_term, '$options': 'i'}},
-                    {'model': {'$regex': search_term, '$options': 'i'}},
-                    {'features': {'$regex': search_term, '$options': 'i'}},
+        {"$unwind": {"path": "$brand", "preserveNullAndEmptyArrays": True}}
+    ])
+    
+    # Brand filter
+    if brand_id:
+        pipeline.append({"$match": {"brand._id": ObjectId(brand_id)}})
+    
+    # Add search filter for brand name if search term exists
+    if search_term:
+        pipeline.append({
+            "$match": {
+                "$or": [
+                    {"brand.name": {"$regex": search_term, "$options": "i"}},
+                    {"products.upc_ean": {"$regex": search_term, "$options": "i"}},
+                    {"products.product_name": {"$regex": search_term, "$options": "i"}},
+                    {"products.mpn": {"$regex": search_term, "$options": "i"}},
+                    {"products.model": {"$regex": search_term, "$options": "i"}},
+                    {"products.short_description": {"$regex": search_term, "$options": "i"}},
+                    {"products.features": {"$regex": search_term, "$options": "i"}}
                 ]
             }
-        }, {'$sort': {'_id': reverse_check}}
-    ])
+        })
+    
+    # Group stage
+    pipeline.append({
+        "$group": {
+            "_id": "$_id",
+            "product_name": {"$first": "$products.product_name"},
+            "product_id": {"$first": "$products._id"},
+            "model": {"$first": "$products.model"},
+            "upc_ean": {"$first": "$products.upc_ean"},
+            "is_active": {"$first": "$products.is_active"},
+            "breadcrumb": {"$first": "$products.breadcrumb"},
+            "brand": {"$first": "$brand.name"},
+            "long_description": {"$first": "$products.long_description"},
+            "short_description": {"$first": "$products.short_description"},
+            "features": {"$first": "$products.features"},
+            "attributes": {"$first": "$products.attributes"},
+            "tags": {"$first": "$products.tags"},
+            "msrp": {"$first": "$products.msrp"},
+            "mpn": {"$first": "$products.mpn"},
+            "base_price": {"$first": "$products.base_price"},
+            "key_features": {"$first": "$products.key_features"},
+            "image": {"$first": "$products.image"},
+            "level": {"$first": "$category_level"},
+            "category_id": {"$first": "$category_id"}
+        }
+    })
+    
+    # Sort
+    pipeline.append({"$sort": {"_id": reverse_check}})
+    
+    # Use $facet to get both count and paginated results in one query
+    pipeline.append({
+        "$facet": {
+            "metadata": [{"$count": "total"}],
+            "data": [
+                {"$skip": from_pg},
+                {"$limit": to_pg}
+            ]
+        }
+    })
+    
+    # Execute aggregation
     result = list(product_category_config.objects.aggregate(*pipeline))
-    data = dict()
-    data['product_count'] = len(result)
-    data['product_id_list'] = [str(i['product_id'])for i in result]
-    result_ = result[from_pg:to_pg]
-    for j in result_:
-        del (j['_id'])
-        j['product_id'] = str(j['product_id']) if 'product_id' in j else ""
-        getCategoryLevelOrder(j)
-    data['product_list'] = result_
+    
+    # Extract results
+    if result and len(result) > 0:
+        metadata = result[0].get("metadata", [])
+        product_count = metadata[0]["total"] if metadata else 0
+        products_data = result[0].get("data", [])
+    else:
+        product_count = 0
+        products_data = []
+    
+    # Format response
+    for item in products_data:
+        del item["_id"]
+        item["product_id"] = str(item["product_id"]) if "product_id" in item else ""
+        getCategoryLevelOrder(item)
+    
+    data = {
+        "product_count": product_count,
+        "product_list": products_data,
+        "product_id_list": [item["product_id"] for item in products_data]
+    }
+    
+    # Cache the result (5 minutes)
     DatabaseModel.redis_client.setex(
         cache_key,
-        300, 
-        json.dumps(data, default=str) 
+        300,
+        json.dumps(data, default=str)
     )
+    
     return data
 @csrf_exempt
 def obtainProductDetails(request):
@@ -5208,4 +5574,322 @@ def quickbooks_get_invoice_details(request):
             'message':str(e)
         })
     
-    
+import json
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+from django.http import HttpResponse
+import io
+@csrf_exempt
+def quickbooks_export_to_excel(request):
+    """
+    Export QuickBooks data to Excel for any endpoint
+    """
+    try:
+        data = json.loads(request.body)
+        realm_id = data.get('realm_id')
+        endpoint = data.get('endpoint')  # invoices, customers, vendors, etc.
+        
+        if not realm_id or not endpoint:
+            return JsonResponse({
+                'estatus': False,
+                'emessage': 'realm_id and endpoint are required'
+            })
+        
+        qb_service = QuickBooksService()
+        
+        # Fetch data based on endpoint
+        if endpoint == 'invoices':
+            result = qb_service.get_all_invoices(realm_id)
+            data_key = 'invoices'
+            headers = [
+                'Invoice ID', 'Document Number', 'Customer Name', 'Invoice Date',
+                'Due Date', 'Subtotal', 'Tax Amount', 'Total Amount', 
+                'Balance Due', 'Payment Status', 'Created At'
+            ]
+            extract_func = lambda item: [
+                item.get('id', ''),
+                item.get('doc_number', ''),
+                item.get('customer_name', ''),
+                item.get('issue_date', ''),
+                item.get('due_date', ''),
+                item.get('subtotal', 0),
+                item.get('tax_amount', 0),
+                item.get('total_amount', 0),
+                item.get('balance_due', 0),
+                item.get('payment_status', ''),
+                item.get('created_at', '')
+            ]
+            
+        elif endpoint == 'customers':
+            result = qb_service.get_all_customers(realm_id)
+            data_key = 'customers'
+            headers = [
+                'Customer ID', 'Display Name', 'Company Name', 'Email',
+                'Phone', 'Balance', 'Opening Balance', 'Active Status',
+                'Created At', 'Updated At'
+            ]
+            extract_func = lambda item: [
+                item.get('id', ''),
+                item.get('display_name', ''),
+                item.get('company_name', ''),
+                item.get('email', ''),
+                item.get('phone', ''),
+                item.get('balance', 0),
+                item.get('opening_balance', 0),
+                'Active' if item.get('is_active') else 'Inactive',
+                item.get('created_at', ''),
+                item.get('updated_at', '')
+            ]
+            
+        elif endpoint == 'vendors':
+            result = qb_service.get_all_vendors(realm_id)
+            data_key = 'vendors'
+            headers = [
+                'Vendor ID', 'Display Name', 'Company Name', 'Email',
+                'Phone', 'Balance', 'Account Number', 'Tax ID',
+                'Active Status', 'Created At', 'Updated At'
+            ]
+            extract_func = lambda item: [
+                item.get('id', ''),
+                item.get('display_name', ''),
+                item.get('company_name', ''),
+                item.get('email', ''),
+                item.get('phone', ''),
+                item.get('balance', 0),
+                item.get('account_number', ''),
+                item.get('tax_id', ''),
+                'Active' if item.get('is_active') else 'Inactive',
+                item.get('created_at', ''),
+                item.get('updated_at', '')
+            ]
+            
+        elif endpoint == 'bills':
+            mode = data.get('mode', 'vendors')
+            if mode == 'customers':
+                result = qb_service.get_all_invoices(realm_id)
+                data_key = 'invoices'
+                headers = [
+                    'Bill ID', 'Document Number', 'Customer Name', 'Bill Date',
+                    'Due Date', 'Total Amount', 'Balance Due', 'Payment Status',
+                    'Created At'
+                ]
+                extract_func = lambda item: [
+                    item.get('id', ''),
+                    item.get('doc_number', ''),
+                    item.get('customer_name', ''),
+                    item.get('issue_date', ''),
+                    item.get('due_date', ''),
+                    item.get('total_amount', 0),
+                    item.get('balance_due', 0),
+                    item.get('payment_status', ''),
+                    item.get('created_at', '')
+                ]
+            else:
+                result = qb_service.get_all_bills(realm_id)
+                data_key = 'bills'
+                headers = [
+                    'Bill ID', 'Document Number', 'Vendor Name', 'Bill Date',
+                    'Due Date', 'Total Amount', 'Balance Due', 'Payment Status',
+                    'Created At'
+                ]
+                extract_func = lambda item: [
+                    item.get('id', ''),
+                    item.get('doc_number', ''),
+                    item.get('vendor_name', ''),
+                    item.get('issue_date', ''),
+                    item.get('due_date', ''),
+                    item.get('total_amount', 0),
+                    item.get('balance_due', 0),
+                    'Paid' if item.get('balance_due', 0) == 0 else 'Unpaid',
+                    item.get('created_at', '')
+                ]
+                
+        elif endpoint == 'purchase-orders':
+            mode = data.get('mode', 'vendors')
+            if mode == 'customers':
+                result = qb_service.get_all_sales_orders(realm_id)
+                data_key = 'sales_orders'
+                headers = [
+                    'PO ID', 'Document Number', 'Customer Name', 'PO Date',
+                    'Total Amount', 'Status', 'Created At'
+                ]
+                extract_func = lambda item: [
+                    item.get('id', ''),
+                    item.get('doc_number', ''),
+                    item.get('customer_name', ''),
+                    item.get('issue_date', ''),
+                    item.get('total_amount', 0),
+                    item.get('status', ''),
+                    item.get('created_at', '')
+                ]
+            else:
+                result = qb_service.get_all_purchase_orders(realm_id)
+                data_key = 'purchase_orders'
+                headers = [
+                    'PO ID', 'Document Number', 'Vendor Name', 'PO Date',
+                    'Expected Date', 'Total Amount', 'Status', 'Created At'
+                ]
+                extract_func = lambda item: [
+                    item.get('id', ''),
+                    item.get('doc_number', ''),
+                    item.get('vendor_name', ''),
+                    item.get('issue_date', ''),
+                    item.get('expected_date', ''),
+                    item.get('total_amount', 0),
+                    item.get('status', ''),
+                    item.get('created_at', '')
+                ]
+                
+        elif endpoint == 'payments':
+            result = qb_service.get_all_payments(realm_id)
+            data_key = 'payments'
+            headers = [
+                'Payment ID', 'Customer Name', 'Payment Date', 'Amount',
+                'Payment Method', 'Reference Number', 'Deposit Account',
+                'Created At'
+            ]
+            extract_func = lambda item: [
+                item.get('id', ''),
+                item.get('customer_name', ''),
+                item.get('payment_date', ''),
+                item.get('amount', 0),
+                item.get('payment_method', ''),
+                item.get('payment_ref_number', ''),
+                item.get('deposit_account', ''),
+                item.get('created_at', '')
+            ]
+            
+        elif endpoint == 'inventory':
+            result = qb_service.get_all_items(realm_id)
+            data_key = 'inventory_items'
+            headers = [
+                'Item ID', 'Name', 'SKU', 'Type', 'Description',
+                'Quantity on Hand', 'Reorder Point', 'Unit Price',
+                'Purchase Cost', 'Active Status', 'Created At'
+            ]
+            extract_func = lambda item: [
+                item.get('id', ''),
+                item.get('name', ''),
+                item.get('sku', ''),
+                item.get('type', ''),
+                item.get('description', ''),
+                item.get('qty_on_hand', 0),
+                item.get('reorder_point', 0),
+                item.get('unit_price', 0),
+                item.get('purchase_cost', 0),
+                'Active' if item.get('is_active') else 'Inactive',
+                item.get('created_at', '')
+            ]
+            
+        elif endpoint == 'accounts':
+            result = qb_service.get_chart_of_accounts(realm_id)
+            data_key = 'accounts'
+            headers = [
+                'Account ID', 'Name', 'Account Type', 'Account Subtype',
+                'Classification', 'Current Balance', 'Opening Balance',
+                'Active Status', 'Created At'
+            ]
+            extract_func = lambda item: [
+                item.get('id', ''),
+                item.get('name', ''),
+                item.get('account_type', ''),
+                item.get('account_subtype', ''),
+                item.get('classification', ''),
+                item.get('current_balance', 0),
+                item.get('opening_balance', 0),
+                'Active' if item.get('is_active') else 'Inactive',
+                item.get('created_at', '')
+            ]
+            
+        else:
+            return JsonResponse({
+                'estatus': False,
+                'emessage': f'Unsupported endpoint: {endpoint}'
+            })
+        
+        if not result['success']:
+            return JsonResponse({
+                'estatus': False,
+                'emessage': result.get('error', 'Failed to fetch data')
+            })
+        
+        # Create Excel workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = endpoint.capitalize()
+        
+        # Styling for headers
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="2d8a4e", end_color="2d8a4e", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Write headers
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        # Write data rows
+        items = result.get(data_key, [])
+        row_num = 2
+        for item in items:
+            row_data = extract_func(item)
+            for col_num, cell_value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_num, column=col_num, value=cell_value)
+                cell.border = thin_border
+                if isinstance(cell_value, (int, float)):
+                    cell.number_format = '#,##0.00'
+            row_num += 1
+        
+        # Auto-adjust column widths
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column].width = adjusted_width
+        
+        # Create response
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        # Generate filename
+        company_name = "QuickBooks"
+        try:
+            company_info = qb_service.get_connection_status()
+            if company_info['success'] and company_info['connections']:
+                company_name = company_info['connections'][0].get('company', {}).get('name', 'QuickBooks').replace(' ', '_')
+        except:
+            pass
+        
+        filename = f"{company_name}_{endpoint}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error exporting to Excel: {e}")
+        return JsonResponse({
+            'estatus': False,
+            'emessage': str(e)
+        })
