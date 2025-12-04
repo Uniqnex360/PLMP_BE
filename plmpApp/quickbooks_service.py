@@ -374,7 +374,7 @@ class QuickBooksService:
             payment_list = []
             for p in payments:
                 payment_list.append({
-                    'id': p.Id,
+                    'id': p.Id, 
                     'payment_date': str(p.TxnDate) if p.TxnDate else None,
                     'amount':self.get_payments_for_credit(p) if p.TotalAmt==0 else  float(p.TotalAmt) if p.TotalAmt else 0,
                     'payment_method': "Credit Applied" if p.TotalAmt == 0 and hasattr(p, 'Line') and p.Line else (p.PaymentMethodRef.name if p.PaymentMethodRef else None),
